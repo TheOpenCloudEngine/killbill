@@ -58,9 +58,36 @@ public class VersionedCatalogMapper {
         return result;
     }
 
+    /**
+     * 다이나믹 하게 구성한 versionedCatalog 에 clock 을 배정한다.
+     * @param versionedCatalog
+     * @param internalTenantContext
+     * @return
+     * @throws CatalogApiException
+     */
+    public VersionedCatalog toVersionedCatalog(final VersionedCatalog versionedCatalog, final InternalTenantContext internalTenantContext) throws CatalogApiException {
+        final VersionedCatalog result = new VersionedCatalog(clock);
+        for (final StandaloneCatalog standaloneCatalog : versionedCatalog.getVersions()) {
+            result.add(toStandaloneCatalogWithPriceOverride(standaloneCatalog, internalTenantContext));
+        }
+        return result;
+    }
+
     private StandaloneCatalogWithPriceOverride toStandaloneCatalogWithPriceOverride(final VersionedPluginCatalog pluginCatalog, final StandalonePluginCatalog input, final InternalTenantContext internalTenantContext) {
         final StandaloneCatalogMapper mapper = new StandaloneCatalogMapper(pluginCatalog.getCatalogName(), pluginCatalog.getRecurringBillingMode());
         final StandaloneCatalog catalog = mapper.toStandaloneCatalog(input, null);
+        final StandaloneCatalogWithPriceOverride result = new StandaloneCatalogWithPriceOverride(catalog, priceOverride, internalTenantContext.getTenantRecordId(), internalCallContextFactory);
+        return result;
+    }
+
+    /**
+     * 다이나믹 하게 구성한 versionedCatalog 의 StandaloneCatalog 에 priceOverride 를 배정한다.
+     * Api 호출시 priceOverride 를 구성할 경우에 해당된다.
+     * @param catalog
+     * @param internalTenantContext
+     * @return
+     */
+    private StandaloneCatalogWithPriceOverride toStandaloneCatalogWithPriceOverride(final StandaloneCatalog catalog, final InternalTenantContext internalTenantContext) {
         final StandaloneCatalogWithPriceOverride result = new StandaloneCatalogWithPriceOverride(catalog, priceOverride, internalTenantContext.getTenantRecordId(), internalCallContextFactory);
         return result;
     }

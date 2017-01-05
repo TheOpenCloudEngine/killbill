@@ -97,6 +97,12 @@ public class EhCacheCatalogCache implements CatalogCache {
             return pluginVersionedCatalog;
         }
 
+        //동적 카달로드 로직 추가
+        final VersionedCatalog dynamicVersionedCatalog = getDynamicCatalog(tenantContext);
+        if (dynamicVersionedCatalog != null) {
+            return dynamicVersionedCatalog;
+        }
+
         if (tenantContext.getTenantRecordId() == InternalCallContextFactory.INTERNAL_TENANT_RECORD_ID) {
             return useDefaultCatalog ? defaultCatalog : null;
         }
@@ -128,19 +134,28 @@ public class EhCacheCatalogCache implements CatalogCache {
         }
     }
 
+    /**
+     * internalTenantContext 를 사용하여 uEngine billing 으로 부터 구매자가 구매하였거나 구매할 예정인 plan 으로만 이루어진 동적 versionedCatalog 를 구성하여 리턴한다.
+     * @param internalTenantContext
+     * @return
+     * @throws CatalogApiException
+     */
+    private VersionedCatalog getDynamicCatalog(final InternalTenantContext internalTenantContext) throws CatalogApiException{
+        return versionedCatalogMapper.toVersionedCatalog(new DynamicVersionedCatalog(internalTenantContext).getVersionedCatalog(), internalTenantContext);
+    }
+
     private VersionedCatalog getCatalogFromPlugins(final InternalTenantContext internalTenantContext) throws CatalogApiException {
-        return new DynamicVersionedCatalog(internalTenantContext).getVersionedCatalog();
-//        final TenantContext tenantContext = internalCallContextFactory.createTenantContext(internalTenantContext);
-//        for (final String service : pluginRegistry.getAllServices()) {
-//            final CatalogPluginApi plugin = pluginRegistry.getServiceForName(service);
-//            final VersionedPluginCatalog pluginCatalog = plugin.getVersionedPluginCatalog(ImmutableList.<PluginProperty>of(), tenantContext);
-//            // First plugin that gets something (for that tenant) returns it
-//            if (pluginCatalog != null) {
-//                logger.info("Returning catalog from plugin {} on tenant {} ", service, internalTenantContext.getTenantRecordId());
-//                return versionedCatalogMapper.toVersionedCatalog(pluginCatalog, internalTenantContext);
-//            }
-//        }
-//        return null;
+        final TenantContext tenantContext = internalCallContextFactory.createTenantContext(internalTenantContext);
+        for (final String service : pluginRegistry.getAllServices()) {
+            final CatalogPluginApi plugin = pluginRegistry.getServiceForName(service);
+            final VersionedPluginCatalog pluginCatalog = plugin.getVersionedPluginCatalog(ImmutableList.<PluginProperty>of(), tenantContext);
+            // First plugin that gets something (for that tenant) returns it
+            if (pluginCatalog != null) {
+                logger.info("Returning catalog from plugin {} on tenant {} ", service, internalTenantContext.getTenantRecordId());
+                return versionedCatalogMapper.toVersionedCatalog(pluginCatalog, internalTenantContext);
+            }
+        }
+        return null;
     }
 
     //
