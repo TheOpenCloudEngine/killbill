@@ -25,6 +25,7 @@ import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.catalog.CatalogUpdater;
 import org.killbill.billing.catalog.StandaloneCatalog;
 import org.killbill.billing.catalog.VersionedCatalog;
+import org.killbill.billing.catalog.api.BillingAlignment;
 import org.killbill.billing.catalog.api.BillingMode;
 import org.killbill.billing.catalog.api.BillingPeriod;
 import org.killbill.billing.catalog.api.CatalogApiException;
@@ -74,8 +75,8 @@ public class DynamicVersionedCatalog {
         // 3.versionedCatalog 조합.
 
         //Case. Large Catalog Test.
-        int count = 10;
-        for (int i = 0; i < count; i++) {
+        int count = 12;
+        for (int i = 1; i <= count; i++) {
             versionedCatalog.add(buildLargeCatalog(i));
         }
         return versionedCatalog;
@@ -84,10 +85,12 @@ public class DynamicVersionedCatalog {
     private StandaloneCatalog buildLargeCatalog(int month) throws CatalogApiException {
         this.recurringBillingMode = BillingMode.IN_ADVANCE;
 
-        final CatalogUpdater catalogUpdater = new CatalogUpdater(DEFAULT_CATALOG_NAME, recurringBillingMode, new DateTime(2016, month, 8, 0, 0), null);
+        //final CatalogUpdater catalogUpdater = new CatalogUpdater(DEFAULT_CATALOG_NAME, recurringBillingMode, new DateTime(2016, month, 8, 0, 0), null);
+        final CatalogUpdater catalogUpdater = new CatalogUpdater(DEFAULT_CATALOG_NAME, recurringBillingMode, new DateTime(2016, month, 8, 0, 0), BillingAlignment.SUBSCRIPTION, null);
+
         int MAX_PLANS = 10;
         for (int i = 1; i <= MAX_PLANS; i++) {
-            final SimplePlanDescriptor desc = new DefaultSimplePlanDescriptor("foo-monthly-" + i + "-pl", "Foo", ProductCategory.BASE, Currency.USD, BigDecimal.TEN, BillingPeriod.MONTHLY, 0, TimeUnit.UNLIMITED, ImmutableList.<String>of());
+            final SimplePlanDescriptor desc = new DefaultSimplePlanDescriptor("foo-monthly-" + i + "-pl", "Foo", ProductCategory.BASE, Currency.USD, BigDecimal.valueOf(100), BillingPeriod.MONTHLY, 0, TimeUnit.UNLIMITED, ImmutableList.<String>of());
             catalogUpdater.addSimplePlanDescriptor(desc);
             if (i % 1000 == 0) {
                 System.err.println("++++++++++++  Iteration = " + i);

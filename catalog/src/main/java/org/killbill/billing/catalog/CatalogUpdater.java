@@ -86,6 +86,37 @@ public class CatalogUpdater {
         this.catalog = new DefaultMutableStaticCatalog(tmp);
     }
 
+    public CatalogUpdater(final String catalogName, final BillingMode billingMode, final DateTime effectiveDate, final BillingAlignment billingAlignment, final Currency... currencies) {
+
+        this.billingAlignment = billingAlignment;
+
+        final DefaultPriceList defaultPriceList = new DefaultPriceList().setName(PriceListSet.DEFAULT_PRICELIST_NAME);
+        final StandaloneCatalog tmp = new StandaloneCatalog()
+                .setCatalogName(catalogName)
+                .setEffectiveDate(effectiveDate.toDate())
+                .setRecurringBillingMode(billingMode)
+                .setProducts(ImmutableList.<Product>of())
+                .setPlans(ImmutableList.<Plan>of())
+                .setPriceLists(new DefaultPriceListSet(defaultPriceList, new DefaultPriceList[0]))
+                .setPlanRules(getSaneDefaultPlanRules(defaultPriceList));
+        if (currencies != null && currencies.length > 0) {
+            tmp.setSupportedCurrencies(currencies);
+        }
+        tmp.initialize(tmp, DUMMY_URI);
+
+        this.catalog = new DefaultMutableStaticCatalog(tmp);
+    }
+
+    private BillingAlignment billingAlignment;
+
+    public BillingAlignment getBillingAlignment() {
+        return billingAlignment;
+    }
+
+    public void setBillingAlignment(final BillingAlignment billingAlignment) {
+        this.billingAlignment = billingAlignment;
+    }
+
     public StandaloneCatalog getCatalog() {
         return catalog;
     }
@@ -110,7 +141,7 @@ public class CatalogUpdater {
             throw new CatalogApiException(ErrorCode.CAT_INVALID_SIMPLE_PLAN_DESCRIPTOR, desc);
         }
 
-        DefaultProduct product = plan != null ? (DefaultProduct) plan.getProduct() : (DefaultProduct)  getExistingProduct(desc.getProductName());
+        DefaultProduct product = plan != null ? (DefaultProduct) plan.getProduct() : (DefaultProduct) getExistingProduct(desc.getProductName());
         if (product == null) {
             product = new DefaultProduct();
             product.setName(desc.getProductName());
@@ -319,7 +350,11 @@ public class CatalogUpdater {
 
         final DefaultCaseBillingAlignment[] billingAlignmentCase = new DefaultCaseBillingAlignment[1];
         billingAlignmentCase[0] = new DefaultCaseBillingAlignment();
-        billingAlignmentCase[0].setAlignment(BillingAlignment.ACCOUNT);
+        if (this.billingAlignment != null) {
+            billingAlignmentCase[0].setAlignment(this.billingAlignment);
+        } else {
+            billingAlignmentCase[0].setAlignment(BillingAlignment.ACCOUNT);
+        }
 
         final DefaultCasePriceList[] priceList = new DefaultCasePriceList[1];
         priceList[0] = new DefaultCasePriceList();
