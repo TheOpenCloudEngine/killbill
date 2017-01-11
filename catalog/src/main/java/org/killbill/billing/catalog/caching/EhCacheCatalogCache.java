@@ -98,9 +98,12 @@ public class EhCacheCatalogCache implements CatalogCache {
         }
 
         //동적 카달로드 로직 추가
-        final VersionedCatalog dynamicVersionedCatalog = getDynamicCatalog(tenantContext);
-        if (dynamicVersionedCatalog != null) {
-            return dynamicVersionedCatalog;
+        String property = System.getProperty("org.killbill.catalog.mode");
+        if("dynamic".equals(property)){
+            final VersionedCatalog dynamicVersionedCatalog = getDynamicCatalog(tenantContext);
+            if (dynamicVersionedCatalog != null) {
+                return dynamicVersionedCatalog;
+            }
         }
 
         if (tenantContext.getTenantRecordId() == InternalCallContextFactory.INTERNAL_TENANT_RECORD_ID) {
