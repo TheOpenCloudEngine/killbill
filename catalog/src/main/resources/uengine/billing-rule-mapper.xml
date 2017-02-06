@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  ~ Copyright 2014-2017 Groupon, Inc
+  ~ Copyright 2014-2017 The Billing Project, LLC
+  ~
+  ~ The Billing Project licenses this file to you under the Apache License, version 2.0
+  ~ (the "License"); you may not use this file except in compliance with the
+  ~ License.  You may obtain a copy of the License at:
+  ~
+  ~    http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+  ~ WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+  ~ License for the specific language governing permissions and limitations
+  ~ under the License.
+  -->
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.uengine.garuda.repository.BillingRuleRepository">
+
+    <insert id="insertRule" parameterType="org.uengine.garuda.model.BillingRule">
+        INSERT INTO billing_rule (
+        organization_id,
+        tenant_id,
+        rule
+        )
+        VALUES (
+        #{organization_id},
+        #{tenant_id},
+        #{rule}
+        )
+    </insert>
+
+    <update id="updateRule" parameterType="org.uengine.garuda.model.BillingRule">
+        UPDATE billing_rule
+        SET
+        rule = #{rule}
+        WHERE organization_id = #{organization_id}
+    </update>
+
+    <select id="selectRuleByOrgId" parameterType="java.lang.String" resultType="org.uengine.garuda.model.BillingRule">
+        SELECT * FROM billing_rule
+        WHERE organization_id = #{organization_id}
+    </select>
+
+    <delete id="deleteRuleByOrgId" parameterType="java.lang.String">
+        DELETE FROM billing_rule
+        WHERE organization_id = #{organization_id}
+    </delete>
+
+    <select id="selectRuleByTenantRecordId" parameterType="java.lang.Long" resultType="org.uengine.garuda.model.BillingRule">
+        select B.* from
+        (SELECT record_id,id FROM tenants where record_id = #{record_id})A
+
+        join
+
+        (SELECT * FROM billing_rule)B
+
+        on B.tenant_id = A.id;
+    </select>
+
+</mapper>

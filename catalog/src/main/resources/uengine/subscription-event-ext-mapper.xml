@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  ~ Copyright 2014-2017 Groupon, Inc
+  ~ Copyright 2014-2017 The Billing Project, LLC
+  ~
+  ~ The Billing Project licenses this file to you under the Apache License, version 2.0
+  ~ (the "License"); you may not use this file except in compliance with the
+  ~ License.  You may obtain a copy of the License at:
+  ~
+  ~    http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+  ~ WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+  ~ License for the specific language governing permissions and limitations
+  ~ under the License.
+  -->
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.uengine.garuda.repository.SubscriptionEventRepository">
+    <insert id="insert" parameterType="org.uengine.garuda.model.SubscriptionEventsExt"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO subscription_events_ext (
+        subscription_id,
+        event_type,
+        user_type,
+        plan_name,
+        product_id,
+        version,
+        account_id,
+        organization_id,
+        tenant_id,
+        account_record_id,
+        tenant_record_id
+        )
+        VALUES (
+        #{subscription_id},
+        #{event_type},
+        #{user_type},
+        #{plan_name},
+        #{product_id},
+        #{version},
+        #{account_id},
+        #{organization_id},
+        #{tenant_id},
+        #{account_record_id},
+        #{tenant_record_id}
+        )
+    </insert>
+
+    <select id="selectById" parameterType="java.lang.Long" resultType="org.uengine.garuda.model.SubscriptionEventsExt">
+        SELECT * FROM subscription_events_ext
+        WHERE id = #{id}
+    </select>
+
+    <delete id="delete" parameterType="java.lang.Long">
+        DELETE FROM subscription_events_ext
+        WHERE id = #{id}
+    </delete>
+
+    <select id="selectSubscriptionCountByProductVersion" parameterType="map" resultType="map">
+        select
+        C.plan_name,
+        sum(C.referenced) as number_of_subscriptions_referenced_by_version,
+        sum(C.subscriptions) as number_of_subscriptions
+        from
+
+        (select
+        A.plan_name,
+        count(*) as referenced,
+        0 as subscriptions
+        FROM
+        (SELECT * from subscription_events_ext
+                WHERE organization_id = #{organization_id}
+                AND subscription_id is not null
+                AND product_id = #{product_id}
+                AND version = #{version}
+                AND (user_type = 'CHANGE' OR user_type = 'CREATE')
+                group by subscription_id,plan_name)A
+                GROUP BY A.plan_name
+
+        union all
+
+        SELECT
+        B.plan_name,
+        0 as referenced,
+        count(*) as subscriptions
+        from
+                (
+                SELECT plan_name,product_id,version,subscription_id from
+                (SELECT * from subscription_events_ext
+                WHERE organization_id = #{organization_id}
+                AND subscription_id is not null
+                AND product_id = #{product_id}
+                AND (user_type = 'CHANGE' OR user_type = 'CREATE')
+                ORDER BY id DESC) A
+                GROUP BY A.subscription_id
+                )B
+                GROUP BY B.plan_name)C
+        group by C.plan_name
+    </select>
+
+    <select id="selectVersionReferencedByAccount" parameterType="map" resultType="org.uengine.garuda.model.ProductDaoVersionWithPlan">
+        select
+        A.*,
+        C.category,
+        B.effective_date,
+        B.plans
+        from
+
+        (select plan_name,product_id,version from subscription_events_ext
+        where account_record_id = #{account_record_id}
+        and tenant_record_id = #{tenant_record_id}
+        group by plan_name,version)A
+
+        join
+
+        (select product_id,version,effective_date,plans from product_version)B
+
+        on B.product_id = A.product_id and B.version = A.version
+
+        join
+
+        (select id,category from product) C
+
+        on C.id = B.product_id
+
+        order by B.effective_date;
+    </select>
+</mapper>
