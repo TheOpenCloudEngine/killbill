@@ -38,9 +38,15 @@ public class SubscriptionEventService {
     }
 
     public SubscriptionEventsExt selectById(Long id) {
-
-        SubscriptionEventRepository mapper = getSqlSessionFactory().getMapper(SubscriptionEventRepository.class);
-        return mapper.selectById(id);
+        SqlSession sessionFactory = getSqlSessionFactory();
+        try {
+            SubscriptionEventRepository mapper = sessionFactory.getMapper(SubscriptionEventRepository.class);
+            return mapper.selectById(id);
+        } finally {
+            if (sessionFactory != null) {
+                sessionFactory.close();
+            }
+        }
     }
 
     public List<ProductDaoVersionWithPlan> selectVersionReferencedByAccount(Long account_record_id, Long tenant_record_id) {
@@ -48,7 +54,14 @@ public class SubscriptionEventService {
         map.put("account_record_id", account_record_id);
         map.put("tenant_record_id", tenant_record_id);
 
-        SubscriptionEventRepository mapper = getSqlSessionFactory().getMapper(SubscriptionEventRepository.class);
-        return mapper.selectVersionReferencedByAccount(map);
+        SqlSession sessionFactory = getSqlSessionFactory();
+        try {
+            SubscriptionEventRepository mapper = sessionFactory.getMapper(SubscriptionEventRepository.class);
+            return mapper.selectVersionReferencedByAccount(map);
+        } finally {
+            if (sessionFactory != null) {
+                sessionFactory.close();
+            }
+        }
     }
 }

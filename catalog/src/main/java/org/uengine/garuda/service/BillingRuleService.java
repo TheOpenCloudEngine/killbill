@@ -40,8 +40,14 @@ public class BillingRuleService {
     }
 
     public BillingRule selectRuleByTenantRecordId(Long id) {
-
-        BillingRuleRepository mapper = getSqlSessionFactory().getMapper(BillingRuleRepository.class);
-        return mapper.selectRuleByTenantRecordId(id);
+        SqlSession sessionFactory = getSqlSessionFactory();
+        try {
+            BillingRuleRepository mapper = sessionFactory.getMapper(BillingRuleRepository.class);
+            return mapper.selectRuleByTenantRecordId(id);
+        } finally {
+            if (sessionFactory != null) {
+                sessionFactory.close();
+            }
+        }
     }
 }

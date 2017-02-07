@@ -99,7 +99,7 @@ public class EhCacheCatalogCache implements CatalogCache {
 
         //동적 카달로드 로직 추가
         String property = System.getProperty("org.killbill.catalog.mode");
-        if("dynamic".equals(property)){
+        if("dynamic".equals(property) && tenantContext.getAccountRecordId() != null){
             final VersionedCatalog dynamicVersionedCatalog = getDynamicCatalog(tenantContext);
             if (dynamicVersionedCatalog != null) {
                 return dynamicVersionedCatalog;
