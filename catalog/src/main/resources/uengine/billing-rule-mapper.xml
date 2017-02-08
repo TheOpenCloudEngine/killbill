@@ -18,9 +18,9 @@
 
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="org.uengine.garuda.repository.BillingRuleRepository">
+<mapper namespace="org.uengine.garuda.killbill.repository.BillingRuleRepository">
 
-    <insert id="insertRule" parameterType="org.uengine.garuda.model.BillingRule">
+    <insert id="insertRule" parameterType="org.uengine.garuda.killbill.model.BillingRule">
         INSERT INTO billing_rule (
         organization_id,
         tenant_id,
@@ -33,14 +33,14 @@
         )
     </insert>
 
-    <update id="updateRule" parameterType="org.uengine.garuda.model.BillingRule">
+    <update id="updateRule" parameterType="org.uengine.garuda.killbill.model.BillingRule">
         UPDATE billing_rule
         SET
         rule = #{rule}
         WHERE organization_id = #{organization_id}
     </update>
 
-    <select id="selectRuleByOrgId" parameterType="java.lang.String" resultType="org.uengine.garuda.model.BillingRule">
+    <select id="selectRuleByOrgId" parameterType="java.lang.String" resultType="org.uengine.garuda.killbill.model.BillingRule">
         SELECT * FROM billing_rule
         WHERE organization_id = #{organization_id}
     </select>
@@ -50,7 +50,7 @@
         WHERE organization_id = #{organization_id}
     </delete>
 
-    <select id="selectRuleByTenantRecordId" parameterType="java.lang.Long" resultType="org.uengine.garuda.model.BillingRule">
+    <select id="selectRuleByTenantRecordId" parameterType="java.lang.Long" resultType="org.uengine.garuda.killbill.model.BillingRule">
         select B.* from
         (SELECT record_id,id FROM tenants where record_id = #{record_id})A
 

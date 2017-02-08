@@ -18,8 +18,8 @@
 
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="org.uengine.garuda.repository.SubscriptionEventRepository">
-    <insert id="insert" parameterType="org.uengine.garuda.model.SubscriptionEventsExt"
+<mapper namespace="org.uengine.garuda.killbill.repository.SubscriptionEventRepository">
+    <insert id="insert" parameterType="org.uengine.garuda.killbill.model.SubscriptionEventsExt"
             useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         INSERT INTO subscription_events_ext (
         subscription_id,
@@ -49,7 +49,7 @@
         )
     </insert>
 
-    <select id="selectById" parameterType="java.lang.Long" resultType="org.uengine.garuda.model.SubscriptionEventsExt">
+    <select id="selectById" parameterType="java.lang.Long" resultType="org.uengine.garuda.killbill.model.SubscriptionEventsExt">
         SELECT * FROM subscription_events_ext
         WHERE id = #{id}
     </select>
@@ -101,7 +101,7 @@
         group by C.plan_name
     </select>
 
-    <select id="selectVersionReferencedByAccount" parameterType="map" resultType="org.uengine.garuda.model.ProductDaoVersionWithPlan">
+    <select id="selectVersionReferencedByAccount" parameterType="map" resultType="org.uengine.garuda.killbill.model.ProductDaoVersionWithPlan">
         select
         A.*,
         C.category,

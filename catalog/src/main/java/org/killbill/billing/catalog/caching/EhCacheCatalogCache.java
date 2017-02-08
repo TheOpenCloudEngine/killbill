@@ -99,7 +99,7 @@ public class EhCacheCatalogCache implements CatalogCache {
 
         //동적 카달로드 로직 추가
         String property = System.getProperty("org.killbill.catalog.mode");
-        if("dynamic".equals(property) && tenantContext.getAccountRecordId() != null){
+        if ("dynamic".equals(property) && tenantContext.getAccountRecordId() != null) {
             final VersionedCatalog dynamicVersionedCatalog = getDynamicCatalog(tenantContext);
             if (dynamicVersionedCatalog != null) {
                 return dynamicVersionedCatalog;
@@ -139,12 +139,18 @@ public class EhCacheCatalogCache implements CatalogCache {
 
     /**
      * internalTenantContext 를 사용하여 uEngine billing 으로 부터 구매자가 구매하였거나 구매할 예정인 plan 으로만 이루어진 동적 versionedCatalog 를 구성하여 리턴한다.
+     *
      * @param internalTenantContext
      * @return
      * @throws CatalogApiException
      */
-    private VersionedCatalog getDynamicCatalog(final InternalTenantContext internalTenantContext) throws CatalogApiException{
-        return versionedCatalogMapper.toVersionedCatalog(new DynamicVersionedCatalog(internalTenantContext).getVersionedCatalog(), internalTenantContext);
+    private VersionedCatalog getDynamicCatalog(final InternalTenantContext internalTenantContext) throws CatalogApiException {
+        VersionedCatalog versionedCatalog = new DynamicVersionedCatalog(internalTenantContext).getVersionedCatalog();
+        if (versionedCatalog == null) {
+            return versionedCatalog;
+        } else {
+            return versionedCatalogMapper.toVersionedCatalog(versionedCatalog, internalTenantContext);
+        }
     }
 
     private VersionedCatalog getCatalogFromPlugins(final InternalTenantContext internalTenantContext) throws CatalogApiException {
