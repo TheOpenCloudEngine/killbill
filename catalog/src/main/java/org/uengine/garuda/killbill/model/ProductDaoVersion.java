@@ -28,7 +28,6 @@ public class ProductDaoVersion {
     private String product_id;
     private Long version;
     private Date effective_date;
-    private String is_current;
     private String organization_id;
     private String tenant_id;
     private String plans;
@@ -38,7 +37,7 @@ public class ProductDaoVersion {
         return id;
     }
 
-    public void setId(Long id) {
+    public void setId(final Long id) {
         this.id = id;
     }
 
@@ -46,7 +45,7 @@ public class ProductDaoVersion {
         return product_id;
     }
 
-    public void setProduct_id(String product_id) {
+    public void setProduct_id(final String product_id) {
         this.product_id = product_id;
     }
 
@@ -54,7 +53,7 @@ public class ProductDaoVersion {
         return version;
     }
 
-    public void setVersion(Long version) {
+    public void setVersion(final Long version) {
         this.version = version;
     }
 
@@ -62,23 +61,15 @@ public class ProductDaoVersion {
         return effective_date;
     }
 
-    public void setEffective_date(Date effective_date) {
+    public void setEffective_date(final Date effective_date) {
         this.effective_date = effective_date;
-    }
-
-    public String getIs_current() {
-        return is_current;
-    }
-
-    public void setIs_current(String is_current) {
-        this.is_current = is_current;
     }
 
     public String getOrganization_id() {
         return organization_id;
     }
 
-    public void setOrganization_id(String organization_id) {
+    public void setOrganization_id(final String organization_id) {
         this.organization_id = organization_id;
     }
 
@@ -86,7 +77,7 @@ public class ProductDaoVersion {
         return tenant_id;
     }
 
-    public void setTenant_id(String tenant_id) {
+    public void setTenant_id(final String tenant_id) {
         this.tenant_id = tenant_id;
     }
 
@@ -94,7 +85,7 @@ public class ProductDaoVersion {
         return plans;
     }
 
-    public void setPlans(String plans) {
+    public void setPlans(final String plans) {
         this.plans = plans;
     }
 
@@ -102,7 +93,7 @@ public class ProductDaoVersion {
         return reg_dt;
     }
 
-    public void setReg_dt(Date reg_dt) {
+    public void setReg_dt(final Date reg_dt) {
         this.reg_dt = reg_dt;
     }
 }

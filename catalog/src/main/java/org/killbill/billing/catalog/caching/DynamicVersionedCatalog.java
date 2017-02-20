@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import javax.xml.XMLConstants;
 import javax.xml.bind.JAXBContext;
@@ -187,6 +188,35 @@ public class DynamicVersionedCatalog {
                     }
                 } else {
                     tempList.add(tempCatalog);
+                }
+            }
+
+            //임시저장된 카달로그의 모든 플랜과 가장 이전 내용을 도출.
+            Map<String, Map> allPlans = new HashMap();
+            for (final Map tempCatalog : tempList) {
+                Map<String, Map> plans = (Map) tempCatalog.get("plans");
+                for (Map.Entry<String, Map> entry : plans.entrySet()) {
+                    String plan_name = entry.getKey();
+
+                    //가장 이전을 적용하기 위해 존재할 경우 교체하지 않는다.
+                    if (!allPlans.containsKey(plan_name)) {
+                        allPlans.put(plan_name, new ObjectMapper().convertValue(entry.getValue(), Map.class));
+                    }
+                }
+            }
+            //임시저장된 카달로그 앞 버젼부터, 누락된 플랜이 있다면 가장 이전 내용으로 적용.
+            for (final Map tempCatalog : tempList) {
+                Map<String, String> products = (Map) tempCatalog.get("products");
+                Map<String, Map> plans = (Map) tempCatalog.get("plans");
+                for (final Entry<String, Map> entry : allPlans.entrySet()) {
+                    String plan_name = entry.getKey();
+                    String product_id = plan_name.substring(0, 14);
+                    String category = entry.getValue().get("category").toString();
+
+                    if (!plans.containsKey(plan_name)) {
+                        plans.put(plan_name, new ObjectMapper().convertValue(entry.getValue(), Map.class));
+                        products.put(product_id, category);
+                    }
                 }
             }
 
@@ -458,9 +488,9 @@ public class DynamicVersionedCatalog {
                         return this.string.toString();
                     }
                 };
-//                Marshaller m = marshaller(StandaloneCatalog.class);
-//                m.marshal(catalog, output);
-//                System.out.println(output);
+                //                Marshaller m = marshaller(StandaloneCatalog.class);
+                //                m.marshal(catalog, output);
+                //                System.out.println(output);
 
                 /**
                  * final
@@ -474,18 +504,6 @@ public class DynamicVersionedCatalog {
             ex.printStackTrace();
             return versionedCatalog;
         }
-
-        //        //TODO
-        //        // 1.tenantRecordId, accountRecordId 로 특정인이 구매한 플랜들의 version 들을 uengine billing 에서 받음.
-        //        // 2.uengine-billing 의 organization 의 currency, plan-price-list 받음.
-        //        // 3.versionedCatalog 조합.
-        //
-        //Case. Large Catalog Test.
-        //        int count = 12;
-        //        for (int i = 1; i <= count; i++) {
-        //            versionedCatalog.add(buildLargeCatalog(i));
-        //        }
-        //        return versionedCatalog;
     }
 
     public static Marshaller marshaller(final Class<?> clazz) throws JAXBException, SAXException, IOException, TransformerException {
