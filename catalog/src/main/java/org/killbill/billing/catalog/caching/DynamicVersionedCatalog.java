@@ -236,9 +236,6 @@ public class DynamicVersionedCatalog {
                 //catalog-name
                 catalog.setCatalogName(billingRule.getOrganization_id());
 
-                //RecurringBillingMode
-                catalog.setRecurringBillingMode(BillingMode.IN_ADVANCE);
-
                 //effective_date
                 catalog.setEffectiveDate((Date) tempCatalog.get("effective_date"));
 
@@ -247,6 +244,14 @@ public class DynamicVersionedCatalog {
                  */
                 DefaultPlanRules planRules = new DefaultPlanRules();
                 Map rule = JsonUtils.unmarshal(billingRule.getRule());
+
+                //recurringBillingMode
+                if (rule.containsKey("recurringBillingMode")) {
+                    catalog.setRecurringBillingMode(BillingMode.valueOf(rule.get("recurringBillingMode").toString()));
+                } else {
+                    catalog.setRecurringBillingMode(BillingMode.IN_ADVANCE);
+                }
+
                 //billingAlignment rule
                 if (rule.containsKey("billingAlignment")) {
                     ArrayList<DefaultCaseBillingAlignment> cases = new ArrayList<DefaultCaseBillingAlignment>();
