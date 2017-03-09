@@ -56,6 +56,7 @@ public class DefaultEmailSender implements EmailSender {
     public void sendPlainTextEmail(final List<String> to, final List<String> cc, final String subject, final String body) throws IOException, EmailApiException {
         final SimpleEmail email = new SimpleEmail();
         try {
+            email.setCharset("utf-8");
             email.setMsg(body);
         } catch (EmailException e) {
             throw new EmailApiException(e, ErrorCode.EMAIL_SENDING_FAILED);
@@ -66,6 +67,7 @@ public class DefaultEmailSender implements EmailSender {
 
     private void sendEmail(final List<String> to, final List<String> cc, final String subject, final Email email) throws EmailApiException {
         try {
+            email.setCharset("utf-8");
             email.setSmtpPort(config.getSmtpPort());
             if (config.useSmtpAuth()) {
                 email.setAuthentication(config.getSmtpUserName(), config.getSmtpPassword());
