@@ -20,6 +20,7 @@ package org.killbill.billing.invoice.template.bundles;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URISyntaxException;
 import java.util.Locale;
 import java.util.MissingResourceException;
@@ -57,7 +58,8 @@ public class DefaultResourceBundleFactory implements ResourceBundleFactory {
         final String bundle = getTenantBundleForType(locale, type, tenantContext);
         if (bundle != null) {
             try {
-                return new PropertyResourceBundle(new ByteArrayInputStream(bundle.getBytes(Charsets.UTF_8)));
+                PropertyResourceBundle propertyResourceBundle = new PropertyResourceBundle(new InputStreamReader(new ByteArrayInputStream(bundle.getBytes(Charsets.UTF_8)), "UTF-8"));
+                return propertyResourceBundle;
             } catch (IOException e) {
                 logger.warn("Failed to de-serialize the property bundle for tenant {} and locale {}", tenantContext.getTenantRecordId(), locale);
                 // Fall through...
