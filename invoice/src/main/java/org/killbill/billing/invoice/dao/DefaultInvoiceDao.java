@@ -31,7 +31,6 @@ import java.util.UUID;
 
 import javax.annotation.Nullable;
 
-import org.apache.shiro.util.StringUtils;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.killbill.billing.ErrorCode;
@@ -84,7 +83,7 @@ import org.uengine.garuda.killbill.invoice.model.SubscriptionEventsExt;
 import org.uengine.garuda.killbill.invoice.model.catalog.Phase;
 import org.uengine.garuda.killbill.invoice.model.catalog.Plan;
 import org.uengine.garuda.killbill.invoice.model.catalog.Usage;
-import org.uengine.garuda.killbill.invoice.service.SubscriptionEventService;
+import org.uengine.garuda.killbill.invoice.service.InvoiceExtService;
 import org.uengine.garuda.killbill.invoice.util.JsonUtils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -1010,7 +1009,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
             return;
         }
         String product_id = plan_name.substring(0, 14);
-        SubscriptionEventService eventService = new SubscriptionEventService();
+        InvoiceExtService eventService = new InvoiceExtService();
         List<ProductDaoVersion> versions = eventService.selectVersionByProductId(product_id);
         SubscriptionEventsExt subscriptionEventsExt = eventService.selectLastSubscriptionExt(invoiceItemModelDao.getSubscriptionId().toString());
 

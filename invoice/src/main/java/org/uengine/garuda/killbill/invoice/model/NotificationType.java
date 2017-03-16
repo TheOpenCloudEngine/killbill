@@ -15,21 +15,16 @@
  * under the License.
  */
 
-package org.uengine.garuda.killbill.invoice.repository;
-
-import java.util.List;
-
-import org.uengine.garuda.killbill.invoice.model.ProductDaoVersion;
-import org.uengine.garuda.killbill.invoice.model.SubscriptionEventsExt;
+package org.uengine.garuda.killbill.invoice.model;
 
 /**
- * @author Seungpil PARK
+ * Created by uengine on 2017. 3. 15..
  */
-public interface SubscriptionEventRepository {
-
-    String NAMESPACE = SubscriptionEventRepository.class.getName();
-
-    SubscriptionEventsExt selectLastSubscriptionExt(String subscription_id);
-
-    List<ProductDaoVersion> selectVersionByProductId(String product_id);
+public enum NotificationType {
+    INVOICE,
+    SUCCESSFUL_PAYMENT,
+    FAILED_PAYMENT,
+    SUBSCRIPTION_CANCELLATION_REQUESTED,
+    SUBSCRIPTION_CANCELLATION_EFFECTIVE,
+    PAYMENT_REFUND
 }

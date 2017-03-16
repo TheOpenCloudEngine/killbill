@@ -18,12 +18,11 @@
 
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="org.uengine.garuda.killbill.invoice.repository.SubscriptionEventRepository">
+<mapper namespace="org.uengine.garuda.killbill.invoice.repository.InvoiceExtRepository">
     <select id="selectVersionByProductId" parameterType="java.lang.String" resultType="org.uengine.garuda.killbill.invoice.model.ProductDaoVersion">
         SELECT * FROM product_version
         WHERE product_id = #{product_id}
     </select>
-
 
     <select id="selectLastSubscriptionExt" parameterType="java.lang.String" resultType="org.uengine.garuda.killbill.invoice.model.SubscriptionEventsExt">
         SELECT * from subscription_events_ext where id =
@@ -31,5 +30,26 @@
         where
         subscription_id = #{subscription_id}
         );
+    </select>
+
+    <select id="selectOrganizationFromAccountId" parameterType="java.lang.String" resultType="org.uengine.garuda.killbill.invoice.model.Organization">
+        SELECT C.* FROM
+        (SELECT id,tenant_record_id FROM accounts WHERE id = #{id})A
+        LEFT OUTER JOIN
+
+        (SELECT record_id,id FROM tenants)B
+
+        ON B.record_id = A.tenant_record_id
+
+        LEFT OUTER JOIN
+        (SELECT * FROM organization)C
+
+        ON C.tenant_id = B.id
+    </select>
+
+    <select id="selectByOrgIdAndType" parameterType="map" resultType="org.uengine.garuda.killbill.invoice.model.Template">
+        SELECT * FROM organization_template
+        WHERE organization_id = #{organization_id}
+        AND notification_type = #{notification_type}
     </select>
 </mapper>

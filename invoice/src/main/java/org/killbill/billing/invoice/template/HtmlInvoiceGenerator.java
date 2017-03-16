@@ -31,13 +31,10 @@ import org.killbill.billing.account.api.Account;
 import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.currency.api.CurrencyConversionApi;
 import org.killbill.billing.invoice.api.Invoice;
-import org.killbill.billing.invoice.api.InvoiceItem;
 import org.killbill.billing.invoice.api.formatters.InvoiceFormatter;
 import org.killbill.billing.invoice.api.formatters.InvoiceFormatterFactory;
-import org.killbill.billing.invoice.api.formatters.InvoiceItemFormatter;
 import org.killbill.billing.invoice.api.formatters.ResourceBundleFactory;
 import org.killbill.billing.invoice.api.formatters.ResourceBundleFactory.ResourceBundleType;
-import org.killbill.billing.invoice.template.formatters.DefaultInvoiceItemFormatter;
 import org.killbill.billing.invoice.template.translator.DefaultInvoiceTranslator;
 import org.killbill.billing.tenant.api.TenantInternalApi;
 import org.killbill.billing.util.LocaleUtils;
@@ -46,6 +43,10 @@ import org.killbill.billing.util.email.templates.TemplateEngine;
 import org.killbill.billing.util.io.IOUtils;
 import org.killbill.billing.util.template.translation.TranslatorConfig;
 import org.killbill.xmlloader.UriAccessor;
+import org.uengine.garuda.killbill.invoice.model.NotificationType;
+import org.uengine.garuda.killbill.invoice.model.Organization;
+import org.uengine.garuda.killbill.invoice.model.Template;
+import org.uengine.garuda.killbill.invoice.service.InvoiceExtService;
 
 import com.google.common.base.Strings;
 import com.google.inject.Inject;
@@ -86,43 +87,59 @@ public class HtmlInvoiceGenerator {
         final HtmlInvoice invoiceData = new HtmlInvoice();
         final Map<String, Object> data = new HashMap<String, Object>();
 
-        final ResourceBundle invoiceBundle = accountLocale != null ?
-                                             bundleFactory.createBundle(LocaleUtils.toLocale(accountLocale), config.getInvoiceTemplateBundlePath(), ResourceBundleType.INVOICE_TRANSLATION, context) : null;
-        final ResourceBundle defaultInvoiceBundle = bundleFactory.createBundle(Locale.getDefault(), config.getInvoiceTemplateBundlePath(), ResourceBundleType.INVOICE_TRANSLATION, context);
-        final DefaultInvoiceTranslator invoiceTranslator = new DefaultInvoiceTranslator(invoiceBundle, defaultInvoiceBundle);
-
-        data.put("text", invoiceTranslator);
         data.put("account", account);
 
         final InvoiceFormatter formattedInvoice = factory.createInvoiceFormatter(config, invoice, locale, currencyConversionApi, bundleFactory, context);
         data.put("invoice", formattedInvoice);
 
+        InvoiceExtService invoiceExtService = new InvoiceExtService();
+        Organization organization = invoiceExtService.selectOrganizationFromAccountId(account.getId().toString());
+
+        Template currentTemplate = null;
+        if(organization != null){
+            List<Template> templates = invoiceExtService.selectByOrgIdAndType(organization.getId(), NotificationType.INVOICE.toString());
+
+            //템플릿 중, 어카운트의 로케일과 같은 것을 찾는다.
+            for (final Template template : templates) {
+                if(template.getLocale().equals(account.getLocale())){
+                    currentTemplate = template;
+                }
+            }
+            //템플릿이 없다면, 디폴트 템플릿을 찾는다.
+            if(currentTemplate == null){
+                for (final Template template : templates) {
+                    if("Y".equals(template.getIs_default())){
+                        currentTemplate = template;
+                    }
+                }
+            }
+        }
+
+        //조직이 없거나, currentTemplate 을 찾을 수 없는 경우 원래 로직대로 처리한다.
+        if (organization == null || currentTemplate == null) {
+            final ResourceBundle invoiceBundle = accountLocale != null ?
+                                                 bundleFactory.createBundle(LocaleUtils.toLocale(accountLocale), config.getInvoiceTemplateBundlePath(), ResourceBundleType.INVOICE_TRANSLATION, context) : null;
+            final ResourceBundle defaultInvoiceBundle = bundleFactory.createBundle(Locale.getDefault(), config.getInvoiceTemplateBundlePath(), ResourceBundleType.INVOICE_TRANSLATION, context);
+            final DefaultInvoiceTranslator invoiceTranslator = new DefaultInvoiceTranslator(invoiceBundle, defaultInvoiceBundle);
+
+            data.put("text", invoiceTranslator);
+
+            invoiceData.setSubject(invoiceTranslator.getInvoiceEmailSubject());
+            final String templateText = getTemplateText(locale, manualPay, context);
+            invoiceData.setBody(templateEngine.executeTemplateText(templateText, data));
+            return invoiceData;
+        }
 
 
-        //TODO. 인보이스 트랜스레이션을 조회해서, 트랜스레이션이 있다면
-        // 1. data 의 text 항목을 교체하도록 한다.
-        // 2. 조직을 조회해서 조직 항목을 넣도록 한다.
-
-
-        //TODO. 인보이스 템플릿 조회해서, 템플릿이 있다면.
         // 1. 인보이스 제목을 템플릿의 subject 에서 가져온다.
         // 2. 인보이스 바디를 템플릿의 body 에서 가져온다.
-        // 3. 포맷된 인보이스를 Map 변경한다.
-        // 4. 포맷된 인보이스의 인보이스 아이템중, 플랜네임이 있다면, 디스플레이 네임에 추가하도록 한다.
-        // 5. 플랜네임이 없다면, description 을 디스플레이 네임으로 카피하도록 한다.
-
-
-//        List<InvoiceItem> invoiceItems = formattedInvoice.getInvoiceItems();
-//        for (final InvoiceItem invoiceItem : invoiceItems) {
-//            InvoiceItemFormatter invoiceItemFormatter = (InvoiceItemFormatter) invoiceItem;
-//
-//        }
-
-        //TODO 인보이스 제목을 템플릿의 제목에서 뽑아오도록.
-        invoiceData.setSubject(invoiceTranslator.getInvoiceEmailSubject());
-        final String templateText = getTemplateText(locale, manualPay, context);
-        invoiceData.setBody(templateEngine.executeTemplateText(templateText, data));
-        return invoiceData;
+        else{
+            //조직 데이터 추가
+            data.put("organization", organization);
+            invoiceData.setSubject(templateEngine.executeTemplateText(currentTemplate.getSubject(), data));
+            invoiceData.setBody(templateEngine.executeTemplateText(currentTemplate.getBody(), data));
+            return invoiceData;
+        }
     }
 
     private String getTemplateText(final Locale locale, final boolean manualPay, final InternalTenantContext context) throws IOException {

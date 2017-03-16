@@ -15,19 +15,28 @@
  * under the License.
  */
 
-package org.uengine.garuda.killbill.invoice.service;
+package org.uengine.garuda.killbill.invoice.repository;
 
+import java.util.List;
+import java.util.Map;
+
+import org.uengine.garuda.killbill.invoice.model.Organization;
+import org.uengine.garuda.killbill.invoice.model.ProductDaoVersion;
 import org.uengine.garuda.killbill.invoice.model.SubscriptionEventsExt;
-import org.uengine.garuda.killbill.invoice.util.JsonUtils;
+import org.uengine.garuda.killbill.invoice.model.Template;
 
 /**
- * Created by uengine on 2017. 2. 6..
+ * @author Seungpil PARK
  */
-public class uEngineTest {
+public interface InvoiceExtRepository {
 
-    public static void main(String args[]) throws Exception{
-        InvoiceExtService service = new InvoiceExtService();
-        SubscriptionEventsExt subscriptionEventsExt = service.selectLastSubscriptionExt("aaaa");
-        System.out.println(JsonUtils.marshal(subscriptionEventsExt));
-    }
+    String NAMESPACE = InvoiceExtRepository.class.getName();
+
+    SubscriptionEventsExt selectLastSubscriptionExt(String subscription_id);
+
+    List<ProductDaoVersion> selectVersionByProductId(String product_id);
+
+    Organization selectOrganizationFromAccountId(String account_id);
+
+    List<Template> selectByOrgIdAndType(Map map);
 }

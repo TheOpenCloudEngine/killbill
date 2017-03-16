@@ -17,28 +17,60 @@
 
 package org.uengine.garuda.killbill.invoice.service;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.ibatis.session.SqlSession;
+import org.uengine.garuda.killbill.invoice.model.Organization;
 import org.uengine.garuda.killbill.invoice.model.ProductDaoVersion;
 import org.uengine.garuda.killbill.invoice.model.SubscriptionEventsExt;
+import org.uengine.garuda.killbill.invoice.model.Template;
 import org.uengine.garuda.killbill.invoice.mybatis.InvoiceConnectionFactory;
-import org.uengine.garuda.killbill.invoice.repository.SubscriptionEventRepository;
+import org.uengine.garuda.killbill.invoice.repository.InvoiceExtRepository;
 
 /**
  * Created by uengine on 2017. 2. 6..
  */
-public class SubscriptionEventService {
+public class InvoiceExtService {
 
     public SqlSession getSqlSessionFactory() {
         return InvoiceConnectionFactory.getSqlSessionFactory()
                                        .openSession(true);
     }
 
+    //selectByOrgIdAndType
+    public List<Template> selectByOrgIdAndType(String organization_id, String notification_type) {
+        SqlSession sessionFactory = getSqlSessionFactory();
+        try {
+            InvoiceExtRepository mapper = sessionFactory.getMapper(InvoiceExtRepository.class);
+            Map map = new HashMap();
+            map.put("organization_id", organization_id);
+            map.put("notification_type", notification_type);
+            return mapper.selectByOrgIdAndType(map);
+        } finally {
+            if (sessionFactory != null) {
+                sessionFactory.close();
+            }
+        }
+    }
+
+    public Organization selectOrganizationFromAccountId(String account_id) {
+        SqlSession sessionFactory = getSqlSessionFactory();
+        try {
+            InvoiceExtRepository mapper = sessionFactory.getMapper(InvoiceExtRepository.class);
+            return mapper.selectOrganizationFromAccountId(account_id);
+        } finally {
+            if (sessionFactory != null) {
+                sessionFactory.close();
+            }
+        }
+    }
+
     public SubscriptionEventsExt selectLastSubscriptionExt(String subscription_id) {
         SqlSession sessionFactory = getSqlSessionFactory();
         try {
-            SubscriptionEventRepository mapper = sessionFactory.getMapper(SubscriptionEventRepository.class);
+            InvoiceExtRepository mapper = sessionFactory.getMapper(InvoiceExtRepository.class);
             return mapper.selectLastSubscriptionExt(subscription_id);
         } finally {
             if (sessionFactory != null) {
@@ -50,7 +82,7 @@ public class SubscriptionEventService {
     public List<ProductDaoVersion> selectVersionByProductId(String product_id) {
         SqlSession sessionFactory = getSqlSessionFactory();
         try {
-            SubscriptionEventRepository mapper = sessionFactory.getMapper(SubscriptionEventRepository.class);
+            InvoiceExtRepository mapper = sessionFactory.getMapper(InvoiceExtRepository.class);
             return mapper.selectVersionByProductId(product_id);
         } finally {
             if (sessionFactory != null) {
