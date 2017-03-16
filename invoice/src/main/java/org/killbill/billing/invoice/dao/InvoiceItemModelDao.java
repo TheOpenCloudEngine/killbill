@@ -37,7 +37,7 @@ public class InvoiceItemModelDao extends EntityModelDaoBase implements EntityMod
     private UUID childAccountId;
     private UUID bundleId;
     private UUID subscriptionId;
-    private String description;
+    public String description;
     private String planName;
     private String phaseName;
     private String usageName;

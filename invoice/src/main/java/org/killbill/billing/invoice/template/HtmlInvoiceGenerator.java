@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URISyntaxException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.ResourceBundle;
@@ -30,10 +31,13 @@ import org.killbill.billing.account.api.Account;
 import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.currency.api.CurrencyConversionApi;
 import org.killbill.billing.invoice.api.Invoice;
+import org.killbill.billing.invoice.api.InvoiceItem;
 import org.killbill.billing.invoice.api.formatters.InvoiceFormatter;
 import org.killbill.billing.invoice.api.formatters.InvoiceFormatterFactory;
+import org.killbill.billing.invoice.api.formatters.InvoiceItemFormatter;
 import org.killbill.billing.invoice.api.formatters.ResourceBundleFactory;
 import org.killbill.billing.invoice.api.formatters.ResourceBundleFactory.ResourceBundleType;
+import org.killbill.billing.invoice.template.formatters.DefaultInvoiceItemFormatter;
 import org.killbill.billing.invoice.template.translator.DefaultInvoiceTranslator;
 import org.killbill.billing.tenant.api.TenantInternalApi;
 import org.killbill.billing.util.LocaleUtils;
@@ -93,6 +97,28 @@ public class HtmlInvoiceGenerator {
         final InvoiceFormatter formattedInvoice = factory.createInvoiceFormatter(config, invoice, locale, currencyConversionApi, bundleFactory, context);
         data.put("invoice", formattedInvoice);
 
+
+
+        //TODO. 인보이스 트랜스레이션을 조회해서, 트랜스레이션이 있다면
+        // 1. data 의 text 항목을 교체하도록 한다.
+        // 2. 조직을 조회해서 조직 항목을 넣도록 한다.
+
+
+        //TODO. 인보이스 템플릿 조회해서, 템플릿이 있다면.
+        // 1. 인보이스 제목을 템플릿의 subject 에서 가져온다.
+        // 2. 인보이스 바디를 템플릿의 body 에서 가져온다.
+        // 3. 포맷된 인보이스를 Map 변경한다.
+        // 4. 포맷된 인보이스의 인보이스 아이템중, 플랜네임이 있다면, 디스플레이 네임에 추가하도록 한다.
+        // 5. 플랜네임이 없다면, description 을 디스플레이 네임으로 카피하도록 한다.
+
+
+//        List<InvoiceItem> invoiceItems = formattedInvoice.getInvoiceItems();
+//        for (final InvoiceItem invoiceItem : invoiceItems) {
+//            InvoiceItemFormatter invoiceItemFormatter = (InvoiceItemFormatter) invoiceItem;
+//
+//        }
+
+        //TODO 인보이스 제목을 템플릿의 제목에서 뽑아오도록.
         invoiceData.setSubject(invoiceTranslator.getInvoiceEmailSubject());
         final String templateText = getTemplateText(locale, manualPay, context);
         invoiceData.setBody(templateEngine.executeTemplateText(templateText, data));

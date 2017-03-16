@@ -18,8 +18,11 @@
 
 package org.killbill.billing.invoice.dao;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -28,6 +31,7 @@ import java.util.UUID;
 
 import javax.annotation.Nullable;
 
+import org.apache.shiro.util.StringUtils;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.killbill.billing.ErrorCode;
@@ -73,7 +77,17 @@ import org.killbill.clock.Clock;
 import org.skife.jdbi.v2.IDBI;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.uengine.garuda.killbill.invoice.common.exception.ServiceException;
+import org.uengine.garuda.killbill.invoice.model.ProductDaoVersion;
+import org.uengine.garuda.killbill.invoice.model.ProductVersion;
+import org.uengine.garuda.killbill.invoice.model.SubscriptionEventsExt;
+import org.uengine.garuda.killbill.invoice.model.catalog.Phase;
+import org.uengine.garuda.killbill.invoice.model.catalog.Plan;
+import org.uengine.garuda.killbill.invoice.model.catalog.Usage;
+import org.uengine.garuda.killbill.invoice.service.SubscriptionEventService;
+import org.uengine.garuda.killbill.invoice.util.JsonUtils;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
@@ -460,7 +474,6 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                                                final Map<UUID, BigDecimal> invoiceItemIdsWithNullAmounts, final String transactionExternalKey,
                                                final InternalCallContext context) throws InvoiceApiException {
 
-
         if (isInvoiceAdjusted && invoiceItemIdsWithNullAmounts.size() == 0) {
             throw new InvoiceApiException(ErrorCode.INVOICE_ITEMS_ADJUSTMENT_MISSING);
         }
@@ -726,12 +739,10 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
         });
     }
 
-
     @Override
     public void notifyOfPaymentInit(final InvoicePaymentModelDao invoicePayment, final InternalCallContext context) {
         notifyOfPaymentCompletionInternal(invoicePayment, false, context);
     }
-
 
     @Override
     public void notifyOfPaymentCompletion(final InvoicePaymentModelDao invoicePayment, final InternalCallContext context) {
@@ -983,7 +994,130 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
             validateInvoiceItemToBeAdjusted(invoiceItemSqlDao, invoiceItemModelDao, context);
         }
 
+        try{
+            this.modifyDescriptionOfInvoiceItem(invoiceItemModelDao);
+        }catch (Exception ex){
+            ex.printStackTrace();
+        }
         invoiceItemSqlDao.create(invoiceItemModelDao, context);
+    }
+
+    private void modifyDescriptionOfInvoiceItem(InvoiceItemModelDao invoiceItemModelDao) {
+        //플랜 네임이 있다면
+        String plan_name = invoiceItemModelDao.getPlanName();
+
+        if (plan_name == null || plan_name.length() < 14) {
+            return;
+        }
+        String product_id = plan_name.substring(0, 14);
+        SubscriptionEventService eventService = new SubscriptionEventService();
+        List<ProductDaoVersion> versions = eventService.selectVersionByProductId(product_id);
+        SubscriptionEventsExt subscriptionEventsExt = eventService.selectLastSubscriptionExt(invoiceItemModelDao.getSubscriptionId().toString());
+
+        //versions 리스트가 없다면 유엔진 빌링 제품이 아니다.
+        if (versions == null || versions.isEmpty()) {
+            return;
+        }
+
+        ProductVersion currentVersion = null;
+        List<ProductVersion> versionList = new ArrayList<ProductVersion>();
+        for (final ProductDaoVersion version : versions) {
+            ProductVersion productVersion = this.convertToVersion(version, versions);
+
+            //subscriptionEventsExt 가 있다면, subscriptionEventsExt 의 버젼이 구독버젼이다.
+            if (subscriptionEventsExt != null) {
+                if (subscriptionEventsExt.getVersion().equals(productVersion.getVersion())) {
+                    currentVersion = productVersion;
+                }
+            } else {
+                if ("Y".equals(productVersion.getIs_current())) {
+                    currentVersion = productVersion;
+                }
+            }
+        }
+
+        //currentVersion 을 구하지 못했다면 패스
+        if (currentVersion == null) {
+            return;
+        }
+
+        Plan currentPlan = null;
+        List<Plan> plans = currentVersion.getPlans();
+        for (final Plan plan : plans) {
+            if (plan.getName().equals(plan_name)) {
+                currentPlan = plan;
+            }
+        }
+        if (currentPlan == null) {
+            return;
+        }
+
+        String usageName = invoiceItemModelDao.getUsageName();
+
+        //usage item 일 경우
+        if (usageName != null && usageName.length() > 0) {
+            List<Phase> phases = currentPlan.getInitialPhases();
+            for (final Phase phase : phases) {
+                List<Usage> usages = phase.getUsages();
+                if (usages != null) {
+                    for (final Usage usage : usages) {
+                        if (usage.getName().equals(usageName)) {
+                            invoiceItemModelDao.description = usage.getDisplay_name();
+                        }
+                    }
+                }
+            }
+        }
+        //recurring item 일 경우
+        else {
+            String phaseName = invoiceItemModelDao.getPhaseName();
+            String[] split = phaseName.split("-");
+            String phase_ = null;
+            if (split.length > 0) {
+                phase_ = split[split.length - 1];
+            }
+            phase_ = phase_ == null ? "" : " (" + phase_ + ")";
+
+            invoiceItemModelDao.description = currentPlan.getDisplay_name() + phase_;
+        }
+    }
+
+    private ProductVersion convertToVersion(ProductDaoVersion productDaoVersion, List<ProductDaoVersion> versions) {
+        try {
+            if (productDaoVersion == null) {
+                return null;
+            }
+            //킬빌 서버의 현재 시각을 구한다.
+            Date currentUtcTime = clock.getUTCNow().toDate();
+
+            //비교군과 주어진 버젼의 effective 날짜를 비교하여 is_current 를 구한다.
+            //버젼이 시간이 currentUtcTime 보다 이전인 그룹중 가장 시간 값이 큰 것.
+            String is_current = "N";
+            ProductDaoVersion maxTimeVersion = null;
+            for (ProductDaoVersion version : versions) {
+                if (version.getEffective_date().getTime() < currentUtcTime.getTime()) {
+                    if (maxTimeVersion == null) {
+                        maxTimeVersion = version;
+                    } else {
+                        if (maxTimeVersion.getEffective_date().getTime() < version.getEffective_date().getTime()) {
+                            maxTimeVersion = version;
+                        }
+                    }
+                }
+            }
+            if (productDaoVersion.getId() == maxTimeVersion.getId()) {
+                is_current = "Y";
+            }
+
+            List<Plan> plans = JsonUtils.unmarshalToList(productDaoVersion.getPlans());
+            Map<String, Object> map = JsonUtils.convertClassToMap(productDaoVersion);
+            map.put("plans", plans);
+            map.put("is_current", is_current);
+            return new ObjectMapper().convertValue(map, ProductVersion.class);
+
+        } catch (IOException ex) {
+            throw new ServiceException(ex);
+        }
     }
 
     private void validateInvoiceItemToBeAdjusted(final InvoiceItemSqlDao invoiceItemSqlDao, final InvoiceItemModelDao invoiceItemModelDao, final InternalCallContext context) throws InvoiceApiException {
@@ -1007,7 +1141,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                 // Retrieve the invoice and make sure it belongs to the right account
                 final InvoiceModelDao invoice = transactional.getById(invoiceId.toString(), context);
 
-                if (invoice == null ) {
+                if (invoice == null) {
                     throw new InvoiceApiException(ErrorCode.INVOICE_NOT_FOUND, invoiceId);
                 }
 
@@ -1031,9 +1165,9 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
         try {
             final BigDecimal balance = InvoiceModelDaoHelper.getBalance(invoice);
             final DefaultInvoiceCreationEvent event = new DefaultInvoiceCreationEvent(invoice.getId(), invoice.getAccountId(),
-                                                                                                            balance, invoice.getCurrency(),
-                                                                                                            context.getAccountRecordId(), context.getTenantRecordId(),
-                                                                                                            context.getUserToken());
+                                                                                      balance, invoice.getCurrency(),
+                                                                                      context.getAccountRecordId(), context.getTenantRecordId(),
+                                                                                      context.getUserToken());
             eventBus.postFromTransaction(event, entitySqlDaoWrapperFactory.getHandle().getConnection());
         } catch (final EventBusException e) {
             log.error(String.format("Failed to post invoice creation event %s for account %s", invoice.getAccountId()), e);
@@ -1094,7 +1228,7 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                 // Retrieve the invoice and make sure it belongs to the right account
                 final InvoiceItemModelDao invoiceItem = transactional.getById(invoiceItemId.toString(), context);
 
-                if (invoiceItem == null ) {
+                if (invoiceItem == null) {
                     throw new InvoiceApiException(ErrorCode.INVOICE_ITEM_NOT_FOUND, invoiceItemId);
                 }
 
@@ -1129,14 +1263,14 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                                                                             childAccount.getCurrency(), InvoiceStatus.COMMITTED);
                 final String chargeDescription = "Charge to move credit from child to parent account";
                 final InvoiceItem externalChargeItem = new ExternalChargeInvoiceItem(UUIDs.randomUUID(),
-                                                                                 effectiveDate,
-                                                                                 invoiceForExternalCharge.getId(),
-                                                                                 childAccount.getId(),
-                                                                                 null,
-                                                                                 chargeDescription,
-                                                                                 effectiveDate.toLocalDate(),
-                                                                                 accountCBA,
-                                                                                 childAccount.getCurrency());
+                                                                                     effectiveDate,
+                                                                                     invoiceForExternalCharge.getId(),
+                                                                                     childAccount.getId(),
+                                                                                     null,
+                                                                                     chargeDescription,
+                                                                                     effectiveDate.toLocalDate(),
+                                                                                     accountCBA,
+                                                                                     childAccount.getCurrency());
                 invoiceForExternalCharge.addInvoiceItem(externalChargeItem);
 
                 // create credit to parent account
@@ -1153,7 +1287,6 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                                                                         accountCBA.negate(),
                                                                         childAccount.getCurrency());
                 invoiceForCredit.addInvoiceItem(creditItem);
-
 
                 // save invoices and invoice items
                 InvoiceModelDao childInvoice = new InvoiceModelDao(invoiceForExternalCharge);

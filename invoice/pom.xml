@@ -25,7 +25,20 @@
     <artifactId>killbill-invoice</artifactId>
     <packaging>jar</packaging>
     <name>killbill-invoice</name>
+
+    <properties>
+        <commons.lang.version>2.6</commons.lang.version>
+        <mybatis.spring.version>1.2.2</mybatis.spring.version>
+        <!-- Persistence -->
+        <mybatis.version>3.2.8</mybatis.version>
+
+        <!-- JDBC -->
+        <mysql.version>5.1.34</mysql.version>
+    </properties>
     <dependencies>
+
+        <!--추가된 디펜던시 end-->
+
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-annotations</artifactId>
@@ -54,6 +67,17 @@
             <artifactId>awaitility</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!--추가된 디펜던시-->
+
+        <!-- ================= -->
+        <!--  Jakarta Commons  -->
+        <!-- ================= -->
+        <dependency>
+            <groupId>commons-lang</groupId>
+            <artifactId>commons-lang</artifactId>
+            <version>${commons.lang.version}</version>
+        </dependency>
         <dependency>
             <groupId>io.airlift</groupId>
             <artifactId>command</artifactId>
@@ -77,6 +101,16 @@
         <dependency>
             <groupId>joda-time</groupId>
             <artifactId>joda-time</artifactId>
+        </dependency>
+
+        <!-- ====================== -->
+        <!--  MyBatis && Mysql Dependencies  -->
+        <!-- ====================== -->
+
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>${mysql.version}</version>
         </dependency>
         <dependency>
             <groupId>mysql</groupId>
@@ -211,6 +245,12 @@
             <groupId>org.mockito</groupId>
             <artifactId>mockito-all</artifactId>
             <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.mybatis</groupId>
+            <artifactId>mybatis</artifactId>
+            <version>${mybatis.version}</version>
         </dependency>
         <dependency>
             <groupId>org.skife.config</groupId>
