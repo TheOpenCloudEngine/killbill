@@ -52,4 +52,11 @@
         WHERE organization_id = #{organization_id}
         AND notification_type = #{notification_type}
     </select>
+
+    <select id="selectConfigByOrgId" parameterType="java.lang.String" resultType="org.uengine.garuda.killbill.invoice.model.NotificationConfig">
+        SELECT * FROM notification_config
+        WHERE organization_id = #{organization_id}
+    </select>
+
+
 </mapper>

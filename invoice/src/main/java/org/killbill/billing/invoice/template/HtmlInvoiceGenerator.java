@@ -43,10 +43,12 @@ import org.killbill.billing.util.email.templates.TemplateEngine;
 import org.killbill.billing.util.io.IOUtils;
 import org.killbill.billing.util.template.translation.TranslatorConfig;
 import org.killbill.xmlloader.UriAccessor;
+import org.uengine.garuda.killbill.invoice.model.NotificationConfig;
 import org.uengine.garuda.killbill.invoice.model.NotificationType;
 import org.uengine.garuda.killbill.invoice.model.Organization;
 import org.uengine.garuda.killbill.invoice.model.Template;
 import org.uengine.garuda.killbill.invoice.service.InvoiceExtService;
+import org.uengine.garuda.killbill.invoice.util.JsonUtils;
 
 import com.google.common.base.Strings;
 import com.google.inject.Inject;
@@ -96,19 +98,29 @@ public class HtmlInvoiceGenerator {
         Organization organization = invoiceExtService.selectOrganizationFromAccountId(account.getId().toString());
 
         Template currentTemplate = null;
-        if(organization != null){
+        if (organization != null) {
+            NotificationConfig notificationConfig = invoiceExtService.selectConfigByOrgId(organization.getId());
+            String configuration = notificationConfig.getConfiguration();
+            Map configMap = JsonUtils.unmarshal(configuration);
+
+            //organization 에 인보이스 발송 설정이 금지일 경우 보내지 않는다.
+            final boolean send = (Boolean) configMap.get(NotificationType.INVOICE.toString());
+            if (!send) {
+                return null;
+            }
+
             List<Template> templates = invoiceExtService.selectByOrgIdAndType(organization.getId(), NotificationType.INVOICE.toString());
 
             //템플릿 중, 어카운트의 로케일과 같은 것을 찾는다.
             for (final Template template : templates) {
-                if(template.getLocale().equals(account.getLocale())){
+                if (template.getLocale().equals(account.getLocale())) {
                     currentTemplate = template;
                 }
             }
             //템플릿이 없다면, 디폴트 템플릿을 찾는다.
-            if(currentTemplate == null){
+            if (currentTemplate == null) {
                 for (final Template template : templates) {
-                    if("Y".equals(template.getIs_default())){
+                    if ("Y".equals(template.getIs_default())) {
                         currentTemplate = template;
                     }
                 }
@@ -130,10 +142,9 @@ public class HtmlInvoiceGenerator {
             return invoiceData;
         }
 
-
         // 1. 인보이스 제목을 템플릿의 subject 에서 가져온다.
         // 2. 인보이스 바디를 템플릿의 body 에서 가져온다.
-        else{
+        else {
             //조직 데이터 추가
             data.put("organization", organization);
             invoiceData.setSubject(templateEngine.executeTemplateText(currentTemplate.getSubject(), data));

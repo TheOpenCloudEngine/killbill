@@ -20,6 +20,7 @@ package org.uengine.garuda.killbill.invoice.repository;
 import java.util.List;
 import java.util.Map;
 
+import org.uengine.garuda.killbill.invoice.model.NotificationConfig;
 import org.uengine.garuda.killbill.invoice.model.Organization;
 import org.uengine.garuda.killbill.invoice.model.ProductDaoVersion;
 import org.uengine.garuda.killbill.invoice.model.SubscriptionEventsExt;
@@ -31,6 +32,8 @@ import org.uengine.garuda.killbill.invoice.model.Template;
 public interface InvoiceExtRepository {
 
     String NAMESPACE = InvoiceExtRepository.class.getName();
+
+    NotificationConfig selectConfigByOrgId(String organization_id);
 
     SubscriptionEventsExt selectLastSubscriptionExt(String subscription_id);
 

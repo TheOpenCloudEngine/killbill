@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.ibatis.session.SqlSession;
+import org.uengine.garuda.killbill.invoice.model.NotificationConfig;
 import org.uengine.garuda.killbill.invoice.model.Organization;
 import org.uengine.garuda.killbill.invoice.model.ProductDaoVersion;
 import org.uengine.garuda.killbill.invoice.model.SubscriptionEventsExt;
@@ -37,6 +38,18 @@ public class InvoiceExtService {
     public SqlSession getSqlSessionFactory() {
         return InvoiceConnectionFactory.getSqlSessionFactory()
                                        .openSession(true);
+    }
+
+    public NotificationConfig selectConfigByOrgId(String organization_id) {
+        SqlSession sessionFactory = getSqlSessionFactory();
+        try {
+            InvoiceExtRepository mapper = sessionFactory.getMapper(InvoiceExtRepository.class);
+            return mapper.selectConfigByOrgId(organization_id);
+        } finally {
+            if (sessionFactory != null) {
+                sessionFactory.close();
+            }
+        }
     }
 
     //selectByOrgIdAndType

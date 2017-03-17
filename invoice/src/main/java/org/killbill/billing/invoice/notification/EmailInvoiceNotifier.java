@@ -100,6 +100,12 @@ public class EmailInvoiceNotifier implements InvoiceNotifier {
             throw new InvoiceApiException(e, ErrorCode.EMAIL_SENDING_FAILED);
         }
 
+        //htmlInvoice 가 없다면 발송하지 않는다.
+        //htmlInvoice 가 없는 경우는 organization 의 INVOICE 설정이 false 인 경우이다.
+        if(htmlInvoice == null){
+            return;
+        }
+
         // take localized subject, or the configured one if the localized one is not available
         String subject = htmlInvoice.getSubject();
         if (subject == null) {
