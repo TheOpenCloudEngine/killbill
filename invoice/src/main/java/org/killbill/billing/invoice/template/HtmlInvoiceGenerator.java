@@ -94,8 +94,14 @@ public class HtmlInvoiceGenerator {
         final InvoiceFormatter formattedInvoice = factory.createInvoiceFormatter(config, invoice, locale, currencyConversionApi, bundleFactory, context);
         data.put("invoice", formattedInvoice);
 
-        InvoiceExtService invoiceExtService = new InvoiceExtService();
-        Organization organization = invoiceExtService.selectOrganizationFromAccountId(account.getId().toString());
+        InvoiceExtService invoiceExtService = null;
+        Organization organization = null;
+
+        String property = System.getProperty("org.killbill.catalog.mode");
+        if ("dynamic".equals(property)) {
+            invoiceExtService = new InvoiceExtService();
+            organization = invoiceExtService.selectOrganizationFromAccountId(account.getId().toString());
+        }
 
         Template currentTemplate = null;
         if (organization != null) {
