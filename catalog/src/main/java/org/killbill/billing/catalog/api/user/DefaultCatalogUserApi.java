@@ -19,6 +19,7 @@ package org.killbill.billing.catalog.api.user;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URI;
+import java.util.UUID;
 
 import javax.inject.Inject;
 
@@ -51,7 +52,6 @@ public class DefaultCatalogUserApi implements CatalogUserApi {
     private final TenantUserApi tenantApi;
     private final CatalogCache catalogCache;
 
-
     @Inject
     public DefaultCatalogUserApi(final CatalogService catalogService,
                                  final TenantUserApi tenantApi,
@@ -61,6 +61,12 @@ public class DefaultCatalogUserApi implements CatalogUserApi {
         this.tenantApi = tenantApi;
         this.catalogCache = catalogCache;
         this.internalCallContextFactory = internalCallContextFactory;
+    }
+
+    @Override
+    public Catalog getCatalog(final String catalogName, final TenantContext context, final UUID accountId) throws CatalogApiException {
+        final InternalTenantContext internalTenantContext = internalCallContextFactory.createInternalTenantContext(accountId, context);
+        return catalogService.getFullCatalog(true, true, internalTenantContext);
     }
 
     @Override
@@ -91,7 +97,6 @@ public class DefaultCatalogUserApi implements CatalogUserApi {
             throw new IllegalStateException(e);
         }
     }
-
 
     @Override
     public void createDefaultEmptyCatalog(final DateTime effectiveDate, final CallContext callContext) throws CatalogApiException {
@@ -128,7 +133,6 @@ public class DefaultCatalogUserApi implements CatalogUserApi {
             throw new CatalogApiException(e);
         }
     }
-
 
     private StandaloneCatalog getCurrentStandaloneCatalogForTenant(final InternalTenantContext internalTenantContext) throws CatalogApiException {
         final VersionedCatalog versionedCatalog = (VersionedCatalog) catalogService.getCurrentCatalog(false, false, internalTenantContext);
