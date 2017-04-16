@@ -45,6 +45,7 @@ import com.google.common.collect.Lists;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 public class TestSubscriptionItemTree extends InvoiceTestSuiteNoDB {
 
@@ -62,7 +63,57 @@ public class TestSubscriptionItemTree extends InvoiceTestSuiteNoDB {
     private final String phaseName = "my-phase";
     private final Currency currency = Currency.USD;
 
+    @Test(groups = "fast", description = "Complex multi-level tree, mostly used to test the tree printer")
+    public void testMultipleLevels() throws Exception {
+        final LocalDate startDate = new LocalDate(2014, 1, 1);
+        final LocalDate endDate = new LocalDate(2014, 2, 1);
 
+        final LocalDate startRepairDate1 = new LocalDate(2014, 1, 10);
+        final LocalDate endRepairDate1 = new LocalDate(2014, 1, 15);
+
+        final LocalDate startRepairDate11 = new LocalDate(2014, 1, 10);
+        final LocalDate endRepairDate12 = new LocalDate(2014, 1, 12);
+
+        final LocalDate startRepairDate2 = new LocalDate(2014, 1, 20);
+        final LocalDate endRepairDate2 = new LocalDate(2014, 1, 25);
+
+        final LocalDate startRepairDate21 = new LocalDate(2014, 1, 22);
+        final LocalDate endRepairDate22 = new LocalDate(2014, 1, 23);
+
+        final BigDecimal rate = BigDecimal.TEN;
+        final BigDecimal amount = rate;
+
+        final InvoiceItem initial = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, startDate, endDate, amount, rate, currency);
+
+        final InvoiceItem newItem1 = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, startRepairDate1, endRepairDate1, amount, rate, currency);
+        final InvoiceItem repair1 = new RepairAdjInvoiceItem(invoiceId, accountId, startRepairDate1, endRepairDate1, amount.negate(), currency, initial.getId());
+
+        final InvoiceItem newItem11 = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, startRepairDate11, endRepairDate12, amount, rate, currency);
+        final InvoiceItem repair12 = new RepairAdjInvoiceItem(invoiceId, accountId, startRepairDate11, endRepairDate12, amount.negate(), currency, newItem1.getId());
+
+        final InvoiceItem newItem2 = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, startRepairDate2, endRepairDate2, amount, rate, currency);
+        final InvoiceItem repair2 = new RepairAdjInvoiceItem(invoiceId, accountId, startRepairDate2, endRepairDate2, amount.negate(), currency, initial.getId());
+
+        final InvoiceItem newItem21 = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, startRepairDate21, endRepairDate22, amount, rate, currency);
+        final InvoiceItem repair22 = new RepairAdjInvoiceItem(invoiceId, accountId, startRepairDate21, endRepairDate22, amount.negate(), currency, newItem2.getId());
+
+        final SubscriptionItemTree tree = new SubscriptionItemTree(subscriptionId, invoiceId);
+        tree.addItem(initial);
+        tree.addItem(newItem1);
+        tree.addItem(repair1);
+        tree.addItem(newItem11);
+        tree.addItem(repair12);
+        tree.addItem(newItem2);
+        tree.addItem(repair2);
+        tree.addItem(newItem21);
+        tree.addItem(repair22);
+
+        tree.build();
+        //printTree(tree);
+
+        tree.flatten(true);
+        //printTree(tree);
+    }
 
     @Test(groups = "fast")
     public void testWithExistingSplitRecurring() {
@@ -101,6 +152,7 @@ public class TestSubscriptionItemTree extends InvoiceTestSuiteNoDB {
         // Stage II: Try again.. with existing items
         existingItems.addAll(tree.getView());
 
+        assertEquals(existingItems.size(), 5);
         tree = new SubscriptionItemTree(subscriptionId, invoiceId);
         for (InvoiceItem e : existingItems) {
             tree.addItem(e);
@@ -117,7 +169,6 @@ public class TestSubscriptionItemTree extends InvoiceTestSuiteNoDB {
         // Nothing should be generated
         Assert.assertTrue(tree.getView().isEmpty());
     }
-
 
     @Test(groups = "fast")
     public void testSimpleRepair() {
@@ -166,6 +217,54 @@ public class TestSubscriptionItemTree extends InvoiceTestSuiteNoDB {
     }
 
     @Test(groups = "fast")
+    public void testInvalidRepair() {
+        final LocalDate startDate = new LocalDate(2014, 1, 1);
+        final LocalDate endDate = new LocalDate(2014, 2, 1);
+
+        final BigDecimal rate = new BigDecimal("12.00");
+
+        final InvoiceItem initial = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, startDate, endDate, rate, rate, currency);
+        final InvoiceItem tooEarlyRepair = new RepairAdjInvoiceItem(invoiceId, accountId, startDate.minusDays(1), endDate, rate.negate(), currency, initial.getId());
+        final InvoiceItem tooLateRepair = new RepairAdjInvoiceItem(invoiceId, accountId, startDate, endDate.plusDays(1), rate.negate(), currency, initial.getId());
+
+        SubscriptionItemTree tree = new SubscriptionItemTree(subscriptionId, invoiceId);
+        tree.addItem(initial);
+        tree.addItem(tooEarlyRepair);
+        try {
+            tree.build();
+            fail();
+        } catch (final IllegalStateException e) {
+        }
+
+        tree = new SubscriptionItemTree(subscriptionId, invoiceId);
+        tree.addItem(initial);
+        tree.addItem(tooLateRepair);
+        try {
+            tree.build();
+            fail();
+        } catch (final IllegalStateException e) {
+        }
+    }
+
+    @Test(groups = "fast")
+    public void testDanglingRepair() {
+        final LocalDate startDate = new LocalDate(2014, 1, 1);
+        final LocalDate endDate = new LocalDate(2014, 2, 1);
+
+        final BigDecimal rate = new BigDecimal("12.00");
+
+        final InvoiceItem repair = new RepairAdjInvoiceItem(invoiceId, accountId, startDate.minusDays(1), endDate, rate.negate(), currency, UUID.randomUUID());
+
+        final SubscriptionItemTree tree = new SubscriptionItemTree(subscriptionId, invoiceId);
+        tree.addItem(repair);
+        try {
+            tree.build();
+            fail();
+        } catch (final IllegalStateException e) {
+        }
+    }
+
+    @Test(groups = "fast")
     public void testMultipleRepair() {
 
         final LocalDate startDate = new LocalDate(2014, 1, 1);
@@ -189,7 +288,7 @@ public class TestSubscriptionItemTree extends InvoiceTestSuiteNoDB {
         final InvoiceItem repair1 = new RepairAdjInvoiceItem(invoiceId, accountId, repairDate1, endDate, amount1.negate(), currency, initial.getId());
 
         final InvoiceItem newItem2 = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, repairDate2, endDate, amount3, rate3, currency);
-        final InvoiceItem repair2 = new RepairAdjInvoiceItem(invoiceId, accountId, repairDate2, endDate, amount2.negate(), currency, initial.getId());
+        final InvoiceItem repair2 = new RepairAdjInvoiceItem(invoiceId, accountId, repairDate2, endDate, amount2.negate(), currency, newItem1.getId());
 
         final List<InvoiceItem> expectedResult = Lists.newLinkedList();
         final InvoiceItem expected1 = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, startDate, repairDate1, new BigDecimal("8.52"), rate1, currency);
@@ -419,6 +518,124 @@ public class TestSubscriptionItemTree extends InvoiceTestSuiteNoDB {
         verifyResult(tree.getView(), expectedResult);
     }
 
+    @Test(groups = "fast", description = "https://github.com/killbill/killbill/issues/664")
+    public void testOverlappingRecurring() {
+        final LocalDate startDate1 = new LocalDate(2012, 5, 1);
+        final LocalDate startDate2 = new LocalDate(2012, 5, 2);
+        final LocalDate endDate = new LocalDate(2012, 6, 1);
+
+        final BigDecimal rate = BigDecimal.TEN;
+        final BigDecimal amount = rate;
+
+        final InvoiceItem recurring1 = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, startDate1, endDate, amount, rate, currency);
+        final InvoiceItem recurring2 = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, startDate2, endDate, amount, rate, currency);
+
+        final SubscriptionItemTree tree = new SubscriptionItemTree(subscriptionId, invoiceId);
+        tree.addItem(recurring1);
+        tree.addItem(recurring2);
+
+        try {
+            tree.build();
+            fail();
+        } catch (final IllegalStateException e) {
+        }
+    }
+
+    @Test(groups = "fast", description = "https://github.com/killbill/killbill/issues/664")
+    public void testDoubleBillingOnDifferentInvoices() {
+        final LocalDate startDate1 = new LocalDate(2012, 5, 1);
+        final LocalDate endDate = new LocalDate(2012, 6, 1);
+
+        final BigDecimal rate = BigDecimal.TEN;
+        final BigDecimal amount = rate;
+
+        final InvoiceItem recurring1 = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, startDate1, endDate, amount, rate, currency);
+        final InvoiceItem recurring2 = new RecurringInvoiceItem(UUID.randomUUID(), accountId, bundleId, subscriptionId, planName, phaseName, startDate1, endDate, amount, rate, currency);
+
+        final SubscriptionItemTree tree = new SubscriptionItemTree(subscriptionId, invoiceId);
+        tree.addItem(recurring1);
+        tree.addItem(recurring2);
+
+        try {
+            tree.build();
+            fail();
+        } catch (final IllegalStateException e) {
+        }
+    }
+
+    @Test(groups = "fast")
+    public void testInvalidRepairCausingOverlappingRecurring() {
+        final LocalDate startDate = new LocalDate(2014, 1, 1);
+        final LocalDate endDate = new LocalDate(2014, 2, 1);
+
+        final LocalDate repairDate1 = new LocalDate(2014, 1, 23);
+
+        final LocalDate repairDate2 = new LocalDate(2014, 1, 26);
+
+        final BigDecimal rate1 = new BigDecimal("12.00");
+        final BigDecimal amount1 = rate1;
+
+        final BigDecimal rate2 = new BigDecimal("14.85");
+        final BigDecimal amount2 = rate2;
+
+        final BigDecimal rate3 = new BigDecimal("19.23");
+        final BigDecimal amount3 = rate3;
+
+        final InvoiceItem initial = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, startDate, endDate, amount1, rate1, currency);
+        final InvoiceItem newItem1 = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, repairDate1, endDate, amount2, rate2, currency);
+        final InvoiceItem repair1 = new RepairAdjInvoiceItem(invoiceId, accountId, repairDate1, endDate, amount1.negate(), currency, initial.getId());
+
+        final InvoiceItem newItem2 = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, repairDate2, endDate, amount3, rate3, currency);
+        // This repair should point to newItem1 instead
+        final InvoiceItem repair2 = new RepairAdjInvoiceItem(invoiceId, accountId, repairDate2, endDate, amount2.negate(), currency, initial.getId());
+
+        // Out-of-order insertion to show ordering doesn't matter
+        final SubscriptionItemTree tree = new SubscriptionItemTree(subscriptionId, invoiceId);
+        tree.addItem(repair1);
+        tree.addItem(repair2);
+        tree.addItem(initial);
+        tree.addItem(newItem1);
+        tree.addItem(newItem2);
+
+        try {
+            tree.build();
+            fail();
+        } catch (final IllegalStateException e) {
+        }
+    }
+
+    @Test(groups = "fast")
+    public void testInvalidRepairCausingOverlappingRecurringV2() {
+        final LocalDate startDate = new LocalDate(2014, 1, 1);
+        final LocalDate endDate = new LocalDate(2014, 2, 1);
+
+        final LocalDate repairDate1 = new LocalDate(2014, 1, 23);
+
+        final LocalDate repairDate2 = new LocalDate(2014, 1, 26);
+
+        final BigDecimal rate1 = new BigDecimal("12.00");
+        final BigDecimal amount1 = rate1;
+
+        final BigDecimal rate2 = new BigDecimal("14.85");
+        final BigDecimal amount2 = rate2;
+
+        final InvoiceItem initial = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, startDate, endDate, amount1, rate1, currency);
+        final InvoiceItem newItem1 = new RecurringInvoiceItem(invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, repairDate1, endDate, amount2, rate2, currency);
+        final InvoiceItem repair1 = new RepairAdjInvoiceItem(invoiceId, accountId, repairDate2, endDate, amount1.negate(), currency, initial.getId());
+
+        // Out-of-order insertion to show ordering doesn't matter
+        final SubscriptionItemTree tree = new SubscriptionItemTree(subscriptionId, invoiceId);
+        tree.addItem(repair1);
+        tree.addItem(initial);
+        tree.addItem(newItem1);
+
+        try {
+            tree.build();
+            fail();
+        } catch (final IllegalStateException e) {
+        }
+    }
+
     // The test that first repair (repair1) and new Item (newItem1) end up being ignored.
     @Test(groups = "fast")
     public void testOverlappingRepair() {
@@ -498,7 +715,6 @@ public class TestSubscriptionItemTree extends InvoiceTestSuiteNoDB {
         verifyResult(tree.getView(), expectedResult);
     }
 
-
     // Will test the case A from ItemsNodeInterval#prune logic (an item is left on the interval)
     @Test(groups = "fast")
     public void testFullRepairPruneLogic2() {
@@ -543,7 +759,6 @@ public class TestSubscriptionItemTree extends InvoiceTestSuiteNoDB {
         verifyResult(tree.getView(), expectedResult);
 
     }
-
 
     // Will test the case B from ItemsNodeInterval#prune logic
     @Test(groups = "fast")
@@ -642,8 +857,6 @@ public class TestSubscriptionItemTree extends InvoiceTestSuiteNoDB {
         tree.build();
         verifyResult(tree.getView(), expectedResult);
     }
-
-
 
     @Test(groups = "fast")
     public void testMergeWithNoExisting() {
@@ -1280,9 +1493,13 @@ public class TestSubscriptionItemTree extends InvoiceTestSuiteNoDB {
         Assert.assertEquals(previousExistingSize, 3);
     }
 
-    private void printTree(final SubscriptionItemTree tree) throws IOException {
+    private void printTreeJSON(final SubscriptionItemTree tree) throws IOException {
         final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         tree.getRoot().jsonSerializeTree(OBJECT_MAPPER, outputStream);
         System.out.println(outputStream.toString("UTF-8"));
+    }
+
+    private void printTree(final SubscriptionItemTree tree) throws IOException {
+        System.out.println(TreePrinter.print(tree.getRoot()));
     }
 }

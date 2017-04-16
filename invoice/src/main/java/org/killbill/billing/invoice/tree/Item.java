@@ -24,15 +24,14 @@ import java.util.UUID;
 import org.joda.time.DateTime;
 import org.joda.time.Days;
 import org.joda.time.LocalDate;
-
 import org.killbill.billing.catalog.api.Currency;
 import org.killbill.billing.invoice.api.InvoiceItem;
 import org.killbill.billing.invoice.generator.InvoiceDateUtils;
 import org.killbill.billing.invoice.model.RecurringInvoiceItem;
 import org.killbill.billing.invoice.model.RepairAdjInvoiceItem;
-import org.killbill.billing.util.currency.KillBillMoney;
 
-import com.google.common.base.Objects;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 
 /**
@@ -135,21 +134,25 @@ public class Item {
             return new RecurringInvoiceItem(id, createdDate, invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, newStartDate, newEndDate, positiveAmount, rate, currency);
         } else {
             // We first compute the maximum amount after adjustment and that sets the amount limit of how much can be repaired.
-            final BigDecimal maxAvailableAmountAfterAdj = amount.subtract(adjustedAmount);
-            final BigDecimal maxAvailableAmountForRepair = maxAvailableAmountAfterAdj.subtract(currentRepairedAmount);
+            final BigDecimal maxAvailableAmountForRepair = getNetAmount();
             final BigDecimal positiveAmountForRepair = positiveAmount.compareTo(maxAvailableAmountForRepair) <= 0 ? positiveAmount : maxAvailableAmountForRepair;
             return positiveAmountForRepair.compareTo(BigDecimal.ZERO) > 0 ? new RepairAdjInvoiceItem(targetInvoiceId, accountId, newStartDate, newEndDate, positiveAmountForRepair.negate(), currency, linkedId) : null;
         }
     }
 
     public void incrementAdjustedAmount(final BigDecimal increment) {
-        Preconditions.checkState(increment.compareTo(BigDecimal.ZERO) > 0);
+        Preconditions.checkState(increment.compareTo(BigDecimal.ZERO) > 0, "Invalid adjustment increment='%s', item=%s", increment, this);
         adjustedAmount = adjustedAmount.add(increment);
     }
 
     public void incrementCurrentRepairedAmount(final BigDecimal increment) {
-        Preconditions.checkState(increment.compareTo(BigDecimal.ZERO) > 0);
+        Preconditions.checkState(increment.compareTo(BigDecimal.ZERO) > 0, "Invalid repair increment='%s', item=%s", increment, this);
         currentRepairedAmount = currentRepairedAmount.add(increment);
+    }
+
+    @JsonIgnore
+    public BigDecimal getNetAmount() {
+        return amount.subtract(adjustedAmount).subtract(currentRepairedAmount);
     }
 
     public ItemAction getAction() {
@@ -197,9 +200,9 @@ public class Item {
                // following conditions: same type, subscription, start date. Depending on the catalog configuration, the end
                // date check could also match (e.g. repair from annual to monthly). For that scenario, we need to default
                // to catalog checks (the rate check is a lame check for versioned catalogs).
-               Objects.firstNonNull(planName, "").equals(Objects.firstNonNull(otherItem.getPlanName(), "")) &&
-               Objects.firstNonNull(phaseName, "").equals(Objects.firstNonNull(otherItem.getPhaseName(), "")) &&
-               Objects.firstNonNull(rate, BigDecimal.ZERO).compareTo(Objects.firstNonNull(otherItem.getRate(), BigDecimal.ZERO)) == 0;
+               MoreObjects.firstNonNull(planName, "").equals(MoreObjects.firstNonNull(otherItem.getPlanName(), "")) &&
+               MoreObjects.firstNonNull(phaseName, "").equals(MoreObjects.firstNonNull(otherItem.getPhaseName(), "")) &&
+               MoreObjects.firstNonNull(rate, BigDecimal.ZERO).compareTo(MoreObjects.firstNonNull(otherItem.getRate(), BigDecimal.ZERO)) == 0;
     }
 
     @Override

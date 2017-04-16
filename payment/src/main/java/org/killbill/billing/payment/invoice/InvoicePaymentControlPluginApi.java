@@ -1,6 +1,6 @@
 /*
- * Copyright 2014-2016 Groupon, Inc
- * Copyright 2014-2016 The Billing Project, LLC
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
  * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -32,8 +32,8 @@ import org.joda.time.DateTime;
 import org.killbill.billing.ErrorCode;
 import org.killbill.billing.ObjectType;
 import org.killbill.billing.account.api.AccountApiException;
+import org.killbill.billing.account.api.AccountData;
 import org.killbill.billing.account.api.AccountInternalApi;
-import org.killbill.billing.account.api.ImmutableAccountData;
 import org.killbill.billing.callcontext.InternalCallContext;
 import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.catalog.api.Currency;
@@ -76,7 +76,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Function;
-import com.google.common.base.Objects;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
@@ -176,7 +176,13 @@ public final class InvoicePaymentControlPluginApi implements PaymentControlPlugi
                             log.warn("processedCurrency='{}' of invoice paymentId='{}' doesn't match invoice currency='{}', assuming it is a full payment", paymentControlContext.getProcessedCurrency(), paymentControlContext.getPaymentId(), paymentControlContext.getCurrency());
                             invoicePaymentAmount = paymentControlContext.getAmount();
                         }
-                        log.debug("Notifying invoice of successful paymentId='{}', amount='{}', currency='{}', invoiceId='{}'", paymentControlContext.getPaymentId(), invoicePaymentAmount, paymentControlContext.getCurrency(), invoiceId);
+
+                        final PaymentTransactionModelDao paymentTransactionModelDao = paymentDao.getPaymentTransaction(paymentControlContext.getTransactionId(), internalContext);
+                        // If it's not SUCCESS, it is PENDING
+                        final boolean success = paymentTransactionModelDao.getTransactionStatus() == TransactionStatus.SUCCESS;
+                        log.debug("Notifying invoice of {} paymentId='{}', amount='{}', currency='{}', invoiceId='{}'", success ? "successful" : "pending", paymentControlContext.getPaymentId(), invoicePaymentAmount, paymentControlContext.getCurrency(), invoiceId);
+
+                        // For PENDING payments, the attempt will be kept as unsuccessful and an InvoicePaymentErrorInternalEvent sent on the bus (e.g. for Overdue)
                         invoiceApi.recordPaymentAttemptCompletion(invoiceId,
                                                                   invoicePaymentAmount,
                                                                   paymentControlContext.getCurrency(),
@@ -184,7 +190,7 @@ public final class InvoicePaymentControlPluginApi implements PaymentControlPlugi
                                                                   paymentControlContext.getPaymentId(),
                                                                   paymentControlContext.getTransactionExternalKey(),
                                                                   paymentControlContext.getCreatedDate(),
-                                                                  true,
+                                                                  success,
                                                                   internalContext);
                     }
                     break;
@@ -315,8 +321,8 @@ public final class InvoicePaymentControlPluginApi implements PaymentControlPlugi
                 return new DefaultPriorPaymentControlResult(true);
             }
 
-            // get immutable account and check if it is child and payment is delegated to parent => abort
-            final ImmutableAccountData accountData = accountApi.getImmutableAccountDataById(invoice.getAccountId(), internalContext);
+            // Get account and check if it is child and payment is delegated to parent => abort
+            final AccountData accountData = accountApi.getAccountById(invoice.getAccountId(), internalContext);
             if ((accountData != null) && (accountData.getParentAccountId() != null) && accountData.isPaymentDelegatedToParent()) {
                 return new DefaultPriorPaymentControlResult(true);
             }
@@ -355,7 +361,7 @@ public final class InvoicePaymentControlPluginApi implements PaymentControlPlugi
                 // but onSuccessCall callback never gets called (leaving the place for a double payment if user retries the operation)
                 //
                 invoiceApi.recordPaymentAttemptInit(invoice.getId(),
-                                                    BigDecimal.ZERO,
+                                                    MoreObjects.firstNonNull(paymentControlPluginContext.getAmount(), BigDecimal.ZERO),
                                                     paymentControlPluginContext.getCurrency(),
                                                     paymentControlPluginContext.getCurrency(),
                                                     // Likely to be null, but we don't care as we use the transactionExternalKey
@@ -461,7 +467,7 @@ public final class InvoicePaymentControlPluginApi implements PaymentControlPlugi
                     (specifiedItemAmount.compareTo(BigDecimal.ZERO) <= 0 || specifiedItemAmount.compareTo(itemAmount) > 0)) {
                     throw new PaymentControlApiException("Failed to compute refund: ", new PaymentApiException(ErrorCode.PAYMENT_PLUGIN_EXCEPTION, "You need to specify a valid invoice item amount"));
                 }
-                amountFromItems = amountFromItems.add(Objects.firstNonNull(specifiedItemAmount, itemAmount));
+                amountFromItems = amountFromItems.add(MoreObjects.firstNonNull(specifiedItemAmount, itemAmount));
             }
             return amountFromItems;
         } catch (final InvoiceApiException e) {

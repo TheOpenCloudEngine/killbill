@@ -108,7 +108,6 @@ public class TestInvoicePayment extends TestJaxrsBase {
         verifyInvoice(paymentJson, expectedInvoiceBalance);
     }
 
-
     @Test(groups = "slow", description = "Can create a full refund with invoice item adjustment")
     public void testRefundWithFullInvoiceItemAdjustment() throws Exception {
         final InvoicePayment paymentJson = setupScenarioWithPayment();
@@ -164,6 +163,37 @@ public class TestInvoicePayment extends TestJaxrsBase {
         verifyInvoice(paymentJson, expectedInvoiceBalance);
     }
 
+    @Test(groups = "slow", description = "Cannot create invoice item adjustments for more than the refund amount")
+    public void testPartialRefundWithFullInvoiceItemAdjustment() throws Exception {
+        final InvoicePayment paymentJson = setupScenarioWithPayment();
+
+        // Get the individual items for the invoice
+        final Invoice invoice = killBillClient.getInvoice(paymentJson.getTargetInvoiceId(), true, false, requestOptions);
+        final InvoiceItem itemToAdjust = invoice.getItems().get(0);
+
+        // Issue a refund for a fraction of the amount
+        final BigDecimal refundAmount = getFractionOfAmount(itemToAdjust.getAmount());
+        final BigDecimal expectedInvoiceBalance = invoice.getBalance();
+
+        // Post and verify the refund
+        final InvoicePaymentTransaction refund = new InvoicePaymentTransaction();
+        refund.setPaymentId(paymentJson.getPaymentId());
+        refund.setAmount(refundAmount);
+        refund.setIsAdjusted(true);
+        final InvoiceItem adjustment = new InvoiceItem();
+        adjustment.setInvoiceItemId(itemToAdjust.getInvoiceItemId());
+        // Ask for an adjustment for the full amount (bigger than the refund amount)
+        adjustment.setAmount(itemToAdjust.getAmount());
+        refund.setAdjustments(ImmutableList.<InvoiceItem>of(adjustment));
+        final Payment paymentAfterRefundJson = killBillClient.createInvoicePaymentRefund(refund, requestOptions);
+
+        // The refund did go through
+        verifyRefund(paymentJson, paymentAfterRefundJson, refundAmount);
+
+        // But not the adjustments
+        verifyInvoice(paymentJson, expectedInvoiceBalance);
+    }
+
     @Test(groups = "slow", description = "Can paginate through all payments and refunds")
     public void testPaymentsAndRefundsPagination() throws Exception {
         InvoicePayment lastPayment = setupScenarioWithPayment();
@@ -208,22 +238,22 @@ public class TestInvoicePayment extends TestJaxrsBase {
 
         final Account accountJson = createAccountWithPMBundleAndSubscriptionAndWaitForFirstInvoice();
 
-        InvoicePayments invoicePayments = killBillClient.getInvoicePaymentsForAccount(accountJson.getAccountId(), basicRequestOptions());
+        InvoicePayments invoicePayments = killBillClient.getInvoicePaymentsForAccount(accountJson.getAccountId(), requestOptions);
         assertEquals(invoicePayments.size(), 1);
 
         final InvoicePayment invoicePayment = invoicePayments.get(0);
         // Verify targetInvoiceId is not Null. See #593
         assertNotNull(invoicePayment.getTargetInvoiceId());
 
-        final Invoices invoices = killBillClient.getInvoicesForAccount(accountJson.getAccountId(), basicRequestOptions());
+        final Invoices invoices = killBillClient.getInvoicesForAccount(accountJson.getAccountId(), requestOptions);
         assertEquals(invoices.size(), 2);
         final Invoice invoice = invoices.get(1);
         // Verify this is the correct value
         assertEquals(invoicePayment.getTargetInvoiceId(), invoice.getInvoiceId());
 
         // Make a payment and verify both invoice payment point to the same targetInvoiceId
-        killBillClient.payAllInvoices(accountJson.getAccountId(), false, null, basicRequestOptions());
-        invoicePayments = killBillClient.getInvoicePaymentsForAccount(accountJson.getAccountId(), basicRequestOptions());
+        killBillClient.payAllInvoices(accountJson.getAccountId(), false, null, requestOptions);
+        invoicePayments = killBillClient.getInvoicePaymentsForAccount(accountJson.getAccountId(), requestOptions);
         assertEquals(invoicePayments.size(), 2);
         for (final InvoicePayment cur : invoicePayments) {
             assertEquals(cur.getTargetInvoiceId(), invoice.getInvoiceId());

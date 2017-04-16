@@ -62,12 +62,15 @@ public class ControlPluginRunner {
                                                              final UUID paymentAttemptId,
                                                              final UUID paymentId,
                                                              final String paymentExternalKey,
+                                                             final UUID paymentTransactionId,
                                                              final String paymentTransactionExternalKey,
                                                              final PaymentApiType paymentApiType,
                                                              final TransactionType transactionType,
                                                              final HPPType hppType,
                                                              final BigDecimal amount,
                                                              final Currency currency,
+                                                             final BigDecimal processedAmount,
+                                                             final Currency processedCurrency,
                                                              final boolean isApiPayment,
                                                              final List<String> paymentControlPluginNames,
                                                              final Iterable<PluginProperty> pluginProperties,
@@ -85,12 +88,15 @@ public class ControlPluginRunner {
                                                                                             paymentAttemptId,
                                                                                             paymentId,
                                                                                             paymentExternalKey,
+                                                                                            paymentTransactionId,
                                                                                             paymentTransactionExternalKey,
                                                                                             paymentApiType,
                                                                                             transactionType,
                                                                                             hppType,
                                                                                             amount,
                                                                                             currency,
+                                                                                            processedAmount,
+                                                                                            processedCurrency,
                                                                                             isApiPayment,
                                                                                             callContext);
 
@@ -104,6 +110,11 @@ public class ControlPluginRunner {
             log.debug("Calling priorCall of plugin {}", pluginName);
             prevResult = plugin.priorCall(inputPaymentControlContext, inputPluginProperties);
             log.debug("Successful executed priorCall of plugin {}", pluginName);
+            if (prevResult == null) {
+                // Nothing returned by the plugin
+                continue;
+            }
+
             if (prevResult.getAdjustedPaymentMethodId() != null) {
                 inputPaymentMethodId = prevResult.getAdjustedPaymentMethodId();
             }
@@ -124,21 +135,87 @@ public class ControlPluginRunner {
                                                                           paymentAttemptId,
                                                                           paymentId,
                                                                           paymentExternalKey,
+                                                                          paymentTransactionId,
                                                                           paymentTransactionExternalKey,
                                                                           paymentApiType,
                                                                           transactionType,
                                                                           hppType,
                                                                           inputAmount,
                                                                           inputCurrency,
+                                                                          processedAmount,
+                                                                          processedCurrency,
                                                                           isApiPayment,
                                                                           callContext);
         }
         // Rebuild latest result to include inputPluginProperties
-        prevResult = new DefaultPriorPaymentControlResult(prevResult.isAborted(), inputPaymentMethodId, inputAmount, inputCurrency, inputPluginProperties);
+        prevResult = new DefaultPriorPaymentControlResult(prevResult != null && prevResult.isAborted(), inputPaymentMethodId, inputAmount, inputCurrency, inputPluginProperties);
         return prevResult;
     }
 
     public OnSuccessPaymentControlResult executePluginOnSuccessCalls(final Account account,
+                                                                     final UUID paymentMethodId,
+                                                                     final UUID paymentAttemptId,
+                                                                     final UUID paymentId,
+                                                                     final String paymentExternalKey,
+                                                                     final UUID paymentTransactionId,
+                                                                     final String paymentTransactionExternalKey,
+                                                                     final PaymentApiType paymentApiType,
+                                                                     final TransactionType transactionType,
+                                                                     final HPPType hppType,
+                                                                     final BigDecimal amount,
+                                                                     final Currency currency,
+                                                                     final BigDecimal processedAmount,
+                                                                     final Currency processedCurrency,
+                                                                     final boolean isApiPayment,
+                                                                     final List<String> paymentControlPluginNames,
+                                                                     final Iterable<PluginProperty> pluginProperties,
+                                                                     final CallContext callContext) {
+
+        final PaymentControlContext inputPaymentControlContext = new DefaultPaymentControlContext(account,
+                                                                                                  paymentMethodId,
+                                                                                                  paymentAttemptId,
+                                                                                                  paymentId,
+                                                                                                  paymentExternalKey,
+                                                                                                  paymentTransactionId,
+                                                                                                  paymentTransactionExternalKey,
+                                                                                                  paymentApiType,
+                                                                                                  transactionType,
+                                                                                                  hppType,
+                                                                                                  amount,
+                                                                                                  currency,
+                                                                                                  processedAmount,
+                                                                                                  processedCurrency,
+                                                                                                  isApiPayment,
+                                                                                                  callContext);
+
+        Iterable<PluginProperty> inputPluginProperties = pluginProperties;
+        for (final String pluginName : paymentControlPluginNames) {
+            final PaymentControlPluginApi plugin = paymentControlPluginRegistry.getServiceForName(pluginName);
+            if (plugin != null) {
+                try {
+                    log.debug("Calling onSuccessCall of plugin {}", pluginName);
+                    final OnSuccessPaymentControlResult result = plugin.onSuccessCall(inputPaymentControlContext, inputPluginProperties);
+                    log.debug("Successful executed onSuccessCall of plugin {}", pluginName);
+                    if (result == null) {
+                        // Nothing returned by the plugin
+                        continue;
+                    }
+
+                    if (result.getAdjustedPluginProperties() != null) {
+                        inputPluginProperties = result.getAdjustedPluginProperties();
+                    }
+                    // Exceptions from the control plugins are ignored (and logged) because the semantics on what to do are undefined.
+                } catch (final PaymentControlApiException e) {
+                    log.warn("Error during onSuccessCall for plugin='{}', paymentExternalKey='{}'", pluginName, inputPaymentControlContext.getPaymentExternalKey(), e);
+                } catch (final RuntimeException e) {
+                    log.warn("Error during onSuccessCall for plugin='{}', paymentExternalKey='{}'", pluginName, inputPaymentControlContext.getPaymentExternalKey(), e);
+                }
+            }
+        }
+        return new DefaultOnSuccessPaymentControlResult(inputPluginProperties);
+    }
+
+    public OnFailurePaymentControlResult executePluginOnFailureCalls(final Account account,
                                                                      final UUID paymentMethodId,
                                                                      final UUID paymentAttemptId,
                                                                      final UUID paymentId,
@@ -174,58 +251,6 @@ public class ControlPluginRunner {
                                                                                                   isApiPayment,
                                                                                                   callContext);
 
-        Iterable<PluginProperty> inputPluginProperties = pluginProperties;
-        for (final String pluginName : paymentControlPluginNames) {
-            final PaymentControlPluginApi plugin = paymentControlPluginRegistry.getServiceForName(pluginName);
-            if (plugin != null) {
-                try {
-                    log.debug("Calling onSuccessCall of plugin {}", pluginName);
-                    final OnSuccessPaymentControlResult result = plugin.onSuccessCall(inputPaymentControlContext, inputPluginProperties);
-                    log.debug("Successful executed onSuccessCall of plugin {}", pluginName);
-                    if (result.getAdjustedPluginProperties() != null) {
-                        inputPluginProperties = result.getAdjustedPluginProperties();
-                    }
-                    // Exceptions from the control plugins are ignored (and logged) because the semantics on what to do are undefined.
-                } catch (final PaymentControlApiException e) {
-                    log.warn("Error during onSuccessCall for plugin='{}', paymentExternalKey='{}'", pluginName, inputPaymentControlContext.getPaymentExternalKey(), e);
-                } catch (final RuntimeException e) {
-                    log.warn("Error during onSuccessCall for plugin='{}', paymentExternalKey='{}'", pluginName, inputPaymentControlContext.getPaymentExternalKey(), e);
-                }
-            }
-        }
-        return new DefaultOnSuccessPaymentControlResult(inputPluginProperties);
-    }
-
-    public OnFailurePaymentControlResult executePluginOnFailureCalls(final Account account,
-                                                                     final UUID paymentMethodId,
-                                                                     final UUID paymentAttemptId,
-                                                                     final UUID paymentId,
-                                                                     final String paymentExternalKey,
-                                                                     final String paymentTransactionExternalKey,
-                                                                     final PaymentApiType paymentApiType,
-                                                                     final TransactionType transactionType,
-                                                                     final HPPType hppType,
-                                                                     final BigDecimal amount,
-                                                                     final Currency currency,
-                                                                     final boolean isApiPayment,
-                                                                     final List<String> paymentControlPluginNames,
-                                                                     final Iterable<PluginProperty> pluginProperties,
-                                                                     final CallContext callContext) {
-
-        final PaymentControlContext inputPaymentControlContext = new DefaultPaymentControlContext(account,
-                                                                                                  paymentMethodId,
-                                                                                                  paymentAttemptId,
-                                                                                                  paymentId,
-                                                                                                  paymentExternalKey,
-                                                                                                  paymentTransactionExternalKey,
-                                                                                                  paymentApiType,
-                                                                                                  transactionType,
-                                                                                                  hppType,
-                                                                                                  amount,
-                                                                                                  currency,
-                                                                                                  isApiPayment,
-                                                                                                  callContext);
-
         DateTime candidate = null;
         Iterable<PluginProperty> inputPluginProperties = pluginProperties;
 
@@ -236,6 +261,11 @@ public class ControlPluginRunner {
                     log.debug("Calling onSuccessCall of plugin {}", pluginName);
                     final OnFailurePaymentControlResult result = plugin.onFailureCall(inputPaymentControlContext, inputPluginProperties);
                     log.debug("Successful executed onSuccessCall of plugin {}", pluginName);
+                    if (result == null) {
+                        // Nothing returned by the plugin
+                        continue;
+                    }
+
                     if (candidate == null) {
                         candidate = result.getNextRetryDate();
                     } else if (result.getNextRetryDate() != null) {
@@ -273,15 +303,22 @@ public class ControlPluginRunner {
         private final Currency processedCurrency;
         private final boolean isApiPayment;
 
-        public DefaultPaymentControlContext(final Account account, final UUID paymentMethodId, final UUID attemptId, @Nullable final UUID paymentId, final String paymentExternalKey, final String transactionExternalKey,
-                                            final PaymentApiType paymentApiType, final TransactionType transactionType, final HPPType hppType, final BigDecimal amount, final Currency currency,
-                                            final boolean isApiPayment, final CallContext callContext) {
-            this(account, paymentMethodId, attemptId, paymentId, paymentExternalKey, null, transactionExternalKey, paymentApiType, transactionType, hppType, amount, currency, null, null, isApiPayment, callContext);
-        }
-
-        public DefaultPaymentControlContext(final Account account, final UUID paymentMethodId, final UUID attemptId, @Nullable final UUID paymentId, final String paymentExternalKey, @Nullable final UUID transactionId, final String transactionExternalKey,
-                                            final PaymentApiType paymentApiType, final TransactionType transactionType, final HPPType hppType,
-                                            final BigDecimal amount, final Currency currency, @Nullable final BigDecimal processedAmount, @Nullable final Currency processedCurrency, final boolean isApiPayment, final CallContext callContext) {
+        public DefaultPaymentControlContext(final Account account,
+                                            final UUID paymentMethodId,
+                                            final UUID attemptId,
+                                            @Nullable final UUID paymentId,
+                                            final String paymentExternalKey,
+                                            @Nullable final UUID transactionId,
+                                            final String transactionExternalKey,
+                                            final PaymentApiType paymentApiType,
+                                            final TransactionType transactionType,
+                                            final HPPType hppType,
+                                            final BigDecimal amount,
+                                            final Currency currency,
+                                            @Nullable final BigDecimal processedAmount,
+                                            @Nullable final Currency processedCurrency,
+                                            final boolean isApiPayment,
+                                            final CallContext callContext) {
             super(callContext.getTenantId(), callContext.getUserName(), callContext.getCallOrigin(), callContext.getUserType(), callContext.getReasonCode(), callContext.getComments(), callContext.getUserToken(), callContext.getCreatedDate(), callContext.getUpdatedDate());
             this.account = account;
             this.paymentMethodId = paymentMethodId;

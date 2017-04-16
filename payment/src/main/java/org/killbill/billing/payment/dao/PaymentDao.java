@@ -1,7 +1,9 @@
 /*
  * Copyright 2010-2013 Ning, Inc.
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
- * Ning licenses this file to you under the Apache License, version 2.0
+ * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
  * License.  You may obtain a copy of the License at:
  *
@@ -24,11 +26,14 @@ import org.joda.time.DateTime;
 import org.killbill.billing.callcontext.InternalCallContext;
 import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.catalog.api.Currency;
+import org.killbill.billing.payment.api.Payment;
+import org.killbill.billing.payment.api.PaymentApiException;
 import org.killbill.billing.payment.api.TransactionStatus;
 import org.killbill.billing.payment.api.TransactionType;
 import org.killbill.billing.util.entity.Pagination;
+import org.killbill.billing.util.entity.dao.EntityDao;
 
-public interface PaymentDao {
+public interface PaymentDao extends EntityDao<PaymentModelDao, Payment, PaymentApiException> {
 
     public Pagination<PaymentTransactionModelDao> getByTransactionStatusAcrossTenants(final Iterable<TransactionStatus> transactionStatuses, DateTime createdBeforeDate, DateTime createdAfterDate, final Long offset, final Long limit);
 
@@ -52,13 +57,13 @@ public interface PaymentDao {
 
     public Pagination<PaymentModelDao> searchPayments(String searchKey, Long offset, Long limit, InternalTenantContext context);
 
-    public PaymentModelDao insertPaymentWithFirstTransaction(PaymentModelDao payment, PaymentTransactionModelDao paymentTransaction, InternalCallContext context);
+    public PaymentAndTransactionModelDao insertPaymentWithFirstTransaction(PaymentModelDao payment, PaymentTransactionModelDao paymentTransaction, InternalCallContext context);
 
     public PaymentTransactionModelDao updatePaymentWithNewTransaction(UUID paymentId, PaymentTransactionModelDao paymentTransaction, InternalCallContext context);
 
-    public void updatePaymentAndTransactionOnCompletion(UUID accountId, UUID attemptId, UUID paymentId, TransactionType transactionType, String currentPaymentStateName, String lastPaymentSuccessStateName, UUID transactionId,
-                                                        TransactionStatus paymentStatus, BigDecimal processedAmount, Currency processedCurrency,
-                                                        String gatewayErrorCode, String gatewayErrorMsg, InternalCallContext context);
+    public PaymentAndTransactionModelDao updatePaymentAndTransactionOnCompletion(UUID accountId, UUID attemptId, UUID paymentId, TransactionType transactionType, String currentPaymentStateName, String lastPaymentSuccessStateName, UUID transactionId,
+                                                                                 TransactionStatus paymentStatus, BigDecimal processedAmount, Currency processedCurrency,
+                                                                                 String gatewayErrorCode, String gatewayErrorMsg, InternalCallContext context);
 
     public PaymentModelDao getPayment(UUID paymentId, InternalTenantContext context);
 

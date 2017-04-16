@@ -28,6 +28,7 @@ import org.killbill.billing.catalog.api.BillingAlignment;
 import org.killbill.billing.catalog.api.BillingMode;
 import org.killbill.billing.catalog.api.CatalogApiException;
 import org.killbill.billing.catalog.api.Currency;
+import org.killbill.billing.catalog.api.InternationalPrice;
 import org.killbill.billing.catalog.api.PhaseType;
 import org.killbill.billing.catalog.api.Plan;
 import org.killbill.billing.catalog.api.PlanAlignmentChange;
@@ -50,11 +51,13 @@ import com.google.common.collect.ImmutableList;
 
 public class CatalogUpdater {
 
-    private static URI DUMMY_URI;
+    public static String DEFAULT_CATALOG_NAME = "DEFAULT";
+
+    private static URI DEFAULT_URI;
 
     static {
         try {
-            DUMMY_URI = new URI("dummy");
+            DEFAULT_URI = new URI(DEFAULT_CATALOG_NAME);
         } catch (URISyntaxException e) {
         }
     }
@@ -67,11 +70,11 @@ public class CatalogUpdater {
         this.catalog = new DefaultMutableStaticCatalog(standaloneCatalog);
     }
 
-    public CatalogUpdater(final String catalogName, final BillingMode billingMode, final DateTime effectiveDate, final Currency... currencies) {
+    public CatalogUpdater(final BillingMode billingMode, final DateTime effectiveDate, final Currency... currencies) {
 
         final DefaultPriceList defaultPriceList = new DefaultPriceList().setName(PriceListSet.DEFAULT_PRICELIST_NAME);
         final StandaloneCatalog tmp = new StandaloneCatalog()
-                .setCatalogName(catalogName)
+                .setCatalogName(DEFAULT_CATALOG_NAME)
                 .setEffectiveDate(effectiveDate.toDate())
                 .setRecurringBillingMode(billingMode)
                 .setProducts(ImmutableList.<Product>of())
@@ -80,41 +83,12 @@ public class CatalogUpdater {
                 .setPlanRules(getSaneDefaultPlanRules(defaultPriceList));
         if (currencies != null && currencies.length > 0) {
             tmp.setSupportedCurrencies(currencies);
+        } else {
+            tmp.setSupportedCurrencies(new Currency[0]);
         }
-        tmp.initialize(tmp, DUMMY_URI);
+        tmp.initialize(tmp, DEFAULT_URI);
 
         this.catalog = new DefaultMutableStaticCatalog(tmp);
-    }
-
-    public CatalogUpdater(final String catalogName, final BillingMode billingMode, final DateTime effectiveDate, final BillingAlignment billingAlignment, final Currency... currencies) {
-
-        this.billingAlignment = billingAlignment;
-
-        final DefaultPriceList defaultPriceList = new DefaultPriceList().setName(PriceListSet.DEFAULT_PRICELIST_NAME);
-        final StandaloneCatalog tmp = new StandaloneCatalog()
-                .setCatalogName(catalogName)
-                .setEffectiveDate(effectiveDate.toDate())
-                .setRecurringBillingMode(billingMode)
-                .setProducts(ImmutableList.<Product>of())
-                .setPlans(ImmutableList.<Plan>of())
-                .setPriceLists(new DefaultPriceListSet(defaultPriceList, new DefaultPriceList[0]))
-                .setPlanRules(getSaneDefaultPlanRules(defaultPriceList));
-        if (currencies != null && currencies.length > 0) {
-            tmp.setSupportedCurrencies(currencies);
-        }
-        tmp.initialize(tmp, DUMMY_URI);
-
-        this.catalog = new DefaultMutableStaticCatalog(tmp);
-    }
-
-    private BillingAlignment billingAlignment;
-
-    public BillingAlignment getBillingAlignment() {
-        return billingAlignment;
-    }
-
-    public void setBillingAlignment(final BillingAlignment billingAlignment) {
-        this.billingAlignment = billingAlignment;
     }
 
     public StandaloneCatalog getCatalog() {
@@ -141,18 +115,18 @@ public class CatalogUpdater {
             throw new CatalogApiException(ErrorCode.CAT_INVALID_SIMPLE_PLAN_DESCRIPTOR, desc);
         }
 
-        DefaultProduct product = plan != null ? (DefaultProduct) plan.getProduct() : (DefaultProduct) getExistingProduct(desc.getProductName());
+        validateNewPlanDescriptor(desc);
+
+        DefaultProduct product = plan != null ? (DefaultProduct) plan.getProduct() : (DefaultProduct)  getExistingProduct(desc.getProductName());
         if (product == null) {
             product = new DefaultProduct();
             product.setName(desc.getProductName());
             product.setCatagory(desc.getProductCategory());
-            product.initialize(catalog, DUMMY_URI);
+            product.initialize(catalog, DEFAULT_URI);
             catalog.addProduct(product);
         }
 
         if (plan == null) {
-
-            validateNewPlanDescriptor(desc);
 
             plan = new DefaultPlan();
             plan.setName(desc.getPlanId());
@@ -199,9 +173,7 @@ public class CatalogUpdater {
             evergreenPhase.setRecurring(recurring);
         }
 
-        try {
-            recurring.getRecurringPrice().getPrice(desc.getCurrency());
-        } catch (CatalogApiException ignore) {
+        if (!isPriceForCurrencyExists(recurring.getRecurringPrice(), desc.getCurrency())) {
             catalog.addRecurringPriceToPlan(recurring.getRecurringPrice(), new DefaultPrice().setCurrency(desc.getCurrency()).setValue(desc.getAmount()));
         }
 
@@ -222,7 +194,19 @@ public class CatalogUpdater {
         }
 
         // Reinit catalog
-        catalog.initialize(catalog, DUMMY_URI);
+        catalog.initialize(catalog, DEFAULT_URI);
+    }
+
+    private boolean isPriceForCurrencyExists(final InternationalPrice price, final Currency currency) {
+        if (price.getPrices().length == 0) {
+            return false;
+        }
+        try {
+            price.getPrice(currency);
+        } catch (CatalogApiException ignore) {
+            return false;
+        }
+        return true;
     }
 
     private void validateExistingPlan(final DefaultPlan plan, final SimplePlanDescriptor desc) throws CatalogApiException {
@@ -350,11 +334,7 @@ public class CatalogUpdater {
 
         final DefaultCaseBillingAlignment[] billingAlignmentCase = new DefaultCaseBillingAlignment[1];
         billingAlignmentCase[0] = new DefaultCaseBillingAlignment();
-        if (this.billingAlignment != null) {
-            billingAlignmentCase[0].setAlignment(this.billingAlignment);
-        } else {
-            billingAlignmentCase[0].setAlignment(BillingAlignment.ACCOUNT);
-        }
+        billingAlignmentCase[0].setAlignment(BillingAlignment.ACCOUNT);
 
         final DefaultCasePriceList[] priceList = new DefaultCasePriceList[1];
         priceList[0] = new DefaultCasePriceList();

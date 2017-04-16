@@ -27,6 +27,7 @@ import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.catalog.StandaloneCatalog;
 import org.killbill.billing.catalog.StandaloneCatalogWithPriceOverride;
 import org.killbill.billing.catalog.VersionedCatalog;
+import org.killbill.billing.catalog.api.Catalog;
 import org.killbill.billing.catalog.api.CatalogApiException;
 import org.killbill.billing.catalog.io.VersionedCatalogLoader;
 import org.killbill.billing.catalog.override.PriceOverride;
@@ -52,7 +53,7 @@ public class EhCacheCatalogCache implements CatalogCache {
 
     private final Logger logger = LoggerFactory.getLogger(EhCacheCatalogCache.class);
 
-    private final CacheController cacheController;
+    private final CacheController<Long, Catalog> cacheController;
     private final VersionedCatalogLoader loader;
     private final CacheLoaderArgument cacheLoaderArgumentWithTemplateFiltering;
     private final CacheLoaderArgument cacheLoaderArgument;
@@ -97,6 +98,7 @@ public class EhCacheCatalogCache implements CatalogCache {
             return pluginVersionedCatalog;
         }
 
+        if (InternalCallContextFactory.INTERNAL_TENANT_RECORD_ID.equals(tenantContext.getTenantRecordId())) {
         //동적 카달로드 로직 추가
         String property = System.getProperty("org.killbill.catalog.mode");
         if ("dynamic".equals(property) && tenantContext.getAccountRecordId() != null) {
@@ -122,7 +124,7 @@ public class EhCacheCatalogCache implements CatalogCache {
                     final StandaloneCatalogWithPriceOverride curWithOverride = new StandaloneCatalogWithPriceOverride(cur, priceOverride, tenantContext.getTenantRecordId(), internalCallContextFactory);
                     tenantCatalog.add(curWithOverride);
                 }
-                cacheController.add(tenantContext.getTenantRecordId(), tenantCatalog);
+                cacheController.putIfAbsent(tenantContext.getTenantRecordId(), tenantCatalog);
             }
             return tenantCatalog;
         } catch (final IllegalStateException e) {
@@ -132,7 +134,7 @@ public class EhCacheCatalogCache implements CatalogCache {
 
     @Override
     public void clearCatalog(final InternalTenantContext tenantContext) {
-        if (tenantContext.getTenantRecordId() != InternalCallContextFactory.INTERNAL_TENANT_RECORD_ID) {
+        if (!InternalCallContextFactory.INTERNAL_TENANT_RECORD_ID.equals(tenantContext.getTenantRecordId())) {
             cacheController.remove(tenantContext.getTenantRecordId());
         }
     }
@@ -175,7 +177,7 @@ public class EhCacheCatalogCache implements CatalogCache {
     private CacheLoaderArgument initializeCacheLoaderArgument(final boolean filterTemplateCatalog) {
         final LoaderCallback loaderCallback = new LoaderCallback() {
             @Override
-            public Object loadCatalog(final List<String> catalogXMLs, final Long tenantRecordId) throws CatalogApiException {
+            public Catalog loadCatalog(final List<String> catalogXMLs, final Long tenantRecordId) throws CatalogApiException {
                 return loader.load(catalogXMLs, filterTemplateCatalog, tenantRecordId);
             }
         };

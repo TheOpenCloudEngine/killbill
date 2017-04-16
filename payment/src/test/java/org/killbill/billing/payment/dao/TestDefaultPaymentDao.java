@@ -1,6 +1,6 @@
 /*
- * Copyright 2014-2016 Groupon, Inc
- * Copyright 2014-2016 The Billing Project, LLC
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
  * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -27,6 +27,7 @@ import org.killbill.billing.catalog.api.Currency;
 import org.killbill.billing.payment.PaymentTestSuiteWithEmbeddedDB;
 import org.killbill.billing.payment.api.TransactionStatus;
 import org.killbill.billing.payment.api.TransactionType;
+import org.killbill.billing.payment.core.sm.PaymentStateMachineHelper;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -37,11 +38,11 @@ public class TestDefaultPaymentDao extends PaymentTestSuiteWithEmbeddedDB {
     @Test(groups = "slow")
     public void testPaymentCRUD() throws Exception {
         for (int i = 0; i < 3; i++) {
-            testPaymentCRUDForAccount();
+            testPaymentCRUDForAccount(i + 1);
         }
     }
 
-    public void testPaymentCRUDForAccount() throws Exception {
+    private void testPaymentCRUDForAccount(final int runNb) throws Exception {
         final Account account = testHelper.createTestAccount(UUID.randomUUID().toString(), true);
         final UUID accountId = account.getId();
 
@@ -49,7 +50,7 @@ public class TestDefaultPaymentDao extends PaymentTestSuiteWithEmbeddedDB {
         final PaymentTransactionModelDao specifiedFirstPaymentTransactionModelDao = generatePaymentTransactionModelDao(specifiedFirstPaymentModelDao.getId());
 
         // Create and verify the payment and transaction
-        final PaymentModelDao firstPaymentModelDao = paymentDao.insertPaymentWithFirstTransaction(specifiedFirstPaymentModelDao, specifiedFirstPaymentTransactionModelDao, internalCallContext);
+        final PaymentModelDao firstPaymentModelDao = paymentDao.insertPaymentWithFirstTransaction(specifiedFirstPaymentModelDao, specifiedFirstPaymentTransactionModelDao, internalCallContext).getPaymentModelDao();
         verifyPayment(firstPaymentModelDao, specifiedFirstPaymentModelDao);
         verifyPaymentAndTransactions(internalCallContext, specifiedFirstPaymentModelDao, specifiedFirstPaymentTransactionModelDao);
 
@@ -68,8 +69,8 @@ public class TestDefaultPaymentDao extends PaymentTestSuiteWithEmbeddedDB {
                                                            specifiedSecondPaymentTransactionModelDao.getAttemptId(),
                                                            specifiedSecondPaymentTransactionModelDao.getPaymentId(),
                                                            specifiedFirstPaymentTransactionModelDao.getTransactionType(),
-                                                           "SOME_ERRORED_STATE",
-                                                           "SOME_ERRORED_STATE",
+                                                           PaymentStateMachineHelper.STATE_NAMES[0],
+                                                           PaymentStateMachineHelper.STATE_NAMES[0],
                                                            specifiedSecondPaymentTransactionModelDao.getId(),
                                                            TransactionStatus.PAYMENT_FAILURE,
                                                            processedAmount,
@@ -88,7 +89,7 @@ public class TestDefaultPaymentDao extends PaymentTestSuiteWithEmbeddedDB {
             final PaymentModelDao paymentModelDao = generatePaymentModelDao(accountId);
             final PaymentTransactionModelDao paymentTransactionModelDao = generatePaymentTransactionModelDao(paymentModelDao.getId());
 
-            final PaymentModelDao insertedPaymentModelDao = paymentDao.insertPaymentWithFirstTransaction(paymentModelDao, paymentTransactionModelDao, internalCallContext);
+            final PaymentModelDao insertedPaymentModelDao = paymentDao.insertPaymentWithFirstTransaction(paymentModelDao, paymentTransactionModelDao, internalCallContext).getPaymentModelDao();
             verifyPayment(insertedPaymentModelDao, paymentModelDao);
 
             // Verify search APIs
@@ -99,6 +100,7 @@ public class TestDefaultPaymentDao extends PaymentTestSuiteWithEmbeddedDB {
 
         // Verify search APIs
         Assert.assertEquals(ImmutableList.<PaymentModelDao>copyOf(paymentDao.searchPayments(accountId.toString(), 0L, 100L, internalCallContext).iterator()).size(), 4);
+        Assert.assertEquals(ImmutableList.<PaymentModelDao>copyOf(paymentDao.searchPayments("_ERRORED", 0L, 100L, internalCallContext).iterator()).size(), runNb);
     }
 
     private void verifyPaymentAndTransactions(final InternalCallContext accountCallContext, final PaymentModelDao specifiedFirstPaymentModelDao, final PaymentTransactionModelDao... specifiedFirstPaymentTransactionModelDaos) {

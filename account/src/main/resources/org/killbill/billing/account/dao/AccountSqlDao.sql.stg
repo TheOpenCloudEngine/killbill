@@ -67,14 +67,32 @@ accountRecordIdFieldWithComma(prefix) ::= ""
 accountRecordIdValueWithComma(prefix) ::= ""
 
 update() ::= <<
-    UPDATE accounts
-    SET email = :email, name = :name, first_name_length = :firstNameLength,
-        currency = :currency, billing_cycle_day_local = :billingCycleDayLocal,
-        payment_method_id = :paymentMethodId, time_zone = :timeZone, locale = :locale,
-        address1 = :address1, address2 = :address2, company_name = :companyName, city = :city, state_or_province = :stateOrProvince,
-        country = :country, postal_code = :postalCode, phone = :phone, notes = :notes,
-        is_notified_for_invoices = :isNotifiedForInvoices, updated_date = :updatedDate, updated_by = :updatedBy
-    WHERE id = :id <AND_CHECK_TENANT()>;
+update accounts set
+  email = :email
+, name = :name
+, first_name_length = :firstNameLength
+, currency = :currency
+, billing_cycle_day_local = :billingCycleDayLocal
+, parent_account_id = :parentAccountId
+, is_payment_delegated_to_parent = :isPaymentDelegatedToParent
+, payment_method_id = :paymentMethodId
+, time_zone = :timeZone
+, locale = :locale
+, address1 = :address1
+, address2 = :address2
+, company_name = :companyName
+, city = :city
+, state_or_province = :stateOrProvince
+, country = :country
+, postal_code = :postalCode
+, phone = :phone
+, notes = :notes
+, is_notified_for_invoices = :isNotifiedForInvoices
+, updated_date = :updatedDate
+, updated_by = :updatedBy
+where id = :id
+<AND_CHECK_TENANT()>
+;
 >>
 
 
@@ -104,6 +122,64 @@ searchQuery(prefix) ::= <<
   or <prefix>email like :likeSearchKey
   or <prefix>external_key like :likeSearchKey
   or <prefix>company_name like :likeSearchKey
+>>
+
+/** Unfortunately, we need to force MySQL to use the individual indexes */
+luckySearch() ::= <<
+select
+<allTableFields("t.")>
+from <tableName()> t
+join (
+  select distinct <recordIdField()>
+  from (
+    (
+      select <recordIdField()>
+      from <tableName()>
+      where <idField()> = :searchKey
+      <andCheckSoftDeletionWithComma()>
+      <AND_CHECK_TENANT()>
+      limit 1
+    )
+    union all
+    (
+      select <recordIdField()>
+      from <tableName()>
+      where name = :searchKey
+      <andCheckSoftDeletionWithComma()>
+      <AND_CHECK_TENANT()>
+      limit 1
+    )
+    union all
+    (
+      select <recordIdField()>
+      from <tableName()>
+      where email = :searchKey
+      <andCheckSoftDeletionWithComma()>
+      <AND_CHECK_TENANT()>
+      limit 1
+    )
+    union all
+    (
+      select <recordIdField()>
+      from <tableName()>
+      where external_key = :searchKey
+      <andCheckSoftDeletionWithComma()>
+      <AND_CHECK_TENANT()>
+      limit 1
+    )
+    union all
+    (
+      select <recordIdField()>
+      from <tableName()>
+      where company_name = :searchKey
+      <andCheckSoftDeletionWithComma()>
+      <AND_CHECK_TENANT()>
+      limit 1
+    )
+  ) search_with_idx
+) optimization on <recordIdField("optimization.")> = <recordIdField("t.")>
+limit 1
+;
 >>
 
 getIdFromKey() ::= <<

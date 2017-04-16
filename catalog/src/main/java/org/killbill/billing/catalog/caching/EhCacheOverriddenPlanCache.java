@@ -1,6 +1,6 @@
 /*
- * Copyright 2014-2015 Groupon, Inc
- * Copyright 2014-2015 The Billing Project, LLC
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
  * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -27,6 +27,7 @@ import org.killbill.billing.ObjectType;
 import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.catalog.DefaultPlan;
 import org.killbill.billing.catalog.DefaultPlanPhasePriceOverride;
+import org.killbill.billing.catalog.StandaloneCatalog;
 import org.killbill.billing.catalog.api.CatalogApiException;
 import org.killbill.billing.catalog.api.Currency;
 import org.killbill.billing.catalog.api.Plan;
@@ -47,7 +48,7 @@ import com.google.common.collect.Iterables;
 
 public class EhCacheOverriddenPlanCache implements OverriddenPlanCache {
 
-    private final CacheController cacheController;
+    private final CacheController<String, Plan> cacheController;
     private final LoaderCallback loaderCallback;
     private final CatalogOverrideDao overrideDao;
 
@@ -57,7 +58,7 @@ public class EhCacheOverriddenPlanCache implements OverriddenPlanCache {
         this.cacheController = cacheControllerDispatcher.getCacheController(CacheType.OVERRIDDEN_PLAN);
         this.loaderCallback = new LoaderCallback() {
             @Override
-            public Object loadPlan(final String planName, final StaticCatalog catalog, final InternalTenantContext context) throws CatalogApiException {
+            public Plan loadPlan(final String planName, final StaticCatalog catalog, final InternalTenantContext context) throws CatalogApiException {
                 return loadOverriddenPlan(planName, catalog, context);
             }
         };
@@ -93,7 +94,9 @@ public class EhCacheOverriddenPlanCache implements OverriddenPlanCache {
         final DefaultPlan defaultPlan = (DefaultPlan) catalog.findCurrentPlan(parentPlanName);
 
         final PlanPhasePriceOverride[] overrides = createOverrides(defaultPlan, phaseDefs);
-        return new DefaultPlan(planName, defaultPlan, overrides);
+        final DefaultPlan result =  new DefaultPlan(planName, defaultPlan, overrides);
+        result.initialize((StandaloneCatalog) catalog, ((StandaloneCatalog) catalog).getCatalogURI());
+        return result;
     }
 
     private PlanPhasePriceOverride[] createOverrides(final Plan defaultPlan, final List<CatalogOverridePhaseDefinitionModelDao> phaseDefs) {

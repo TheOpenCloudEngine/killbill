@@ -1,6 +1,6 @@
 /*
- * Copyright 2014-2015 Groupon, Inc
- * Copyright 2014-2015 The Billing Project, LLC
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
  * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -17,13 +17,19 @@
 
 package org.killbill.billing.jaxrs.resources;
 
-import java.util.List;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.URI;
+import java.util.Iterator;
 import java.util.UUID;
 
+import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
+import javax.ws.rs.DefaultValue;
+import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
@@ -31,11 +37,20 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
+import javax.ws.rs.core.StreamingOutput;
 
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
+import org.killbill.billing.ErrorCode;
 import org.killbill.billing.ObjectType;
 import org.killbill.billing.account.api.AccountUserApi;
+import org.killbill.billing.account.api.ImmutableAccountData;
+import org.killbill.billing.catalog.api.Catalog;
+import org.killbill.billing.invoice.api.InvoiceApiException;
+import org.killbill.billing.invoice.api.InvoiceUserApi;
 import org.killbill.billing.jaxrs.json.AdminPaymentJson;
 import org.killbill.billing.jaxrs.util.Context;
 import org.killbill.billing.jaxrs.util.JaxrsUriBuilder;
@@ -54,20 +69,35 @@ import org.killbill.billing.util.api.CustomFieldUserApi;
 import org.killbill.billing.util.api.RecordIdApi;
 import org.killbill.billing.util.api.TagUserApi;
 import org.killbill.billing.util.cache.Cachable.CacheType;
+import org.killbill.billing.util.cache.CacheController;
+import org.killbill.billing.util.cache.CacheControllerDispatcher;
 import org.killbill.billing.util.callcontext.CallContext;
 import org.killbill.billing.util.callcontext.TenantContext;
+import org.killbill.billing.util.config.tenant.PerTenantConfig;
+import org.killbill.billing.util.entity.Pagination;
+import org.killbill.billing.util.tag.Tag;
+import org.killbill.billing.util.tag.dao.SystemTags;
+import org.killbill.bus.api.BusEvent;
+import org.killbill.bus.api.BusEventWithMetadata;
+import org.killbill.bus.api.PersistentBus;
 import org.killbill.clock.Clock;
+import org.killbill.notificationq.api.NotificationEvent;
+import org.killbill.notificationq.api.NotificationEventWithMetadata;
+import org.killbill.notificationq.api.NotificationQueue;
+import org.killbill.notificationq.api.NotificationQueueService;
 
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.google.common.base.Function;
 import com.google.common.base.Predicate;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.inject.Singleton;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
-import net.sf.ehcache.CacheManager;
-import net.sf.ehcache.Ehcache;
 
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
 
@@ -76,20 +106,120 @@ import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
 @Api(value = JaxrsResource.ADMIN_PATH, description = "Admin operations (will require special privileges)")
 public class AdminResource extends JaxRsResourceBase {
 
+    private static final String OK = "OK";
+
     private final AdminPaymentApi adminPaymentApi;
+    private final InvoiceUserApi invoiceUserApi;
     private final TenantUserApi tenantApi;
-    private final CacheManager cacheManager;
+    private final CacheControllerDispatcher cacheControllerDispatcher;
     private final RecordIdApi recordIdApi;
+    private final PersistentBus persistentBus;
+    private final NotificationQueueService notificationQueueService;
 
     @Inject
-    public AdminResource(final JaxrsUriBuilder uriBuilder, final TagUserApi tagUserApi, final CustomFieldUserApi customFieldUserApi, final AuditUserApi auditUserApi, final AccountUserApi accountUserApi, final PaymentApi paymentApi, final AdminPaymentApi adminPaymentApi, final CacheManager cacheManager, final TenantUserApi tenantApi, final RecordIdApi recordIdApi, final Clock clock, final Context context) {
+    public AdminResource(final JaxrsUriBuilder uriBuilder,
+                         final TagUserApi tagUserApi,
+                         final CustomFieldUserApi customFieldUserApi,
+                         final AuditUserApi auditUserApi,
+                         final AccountUserApi accountUserApi,
+                         final PaymentApi paymentApi,
+                         final AdminPaymentApi adminPaymentApi,
+                         final InvoiceUserApi invoiceUserApi,
+                         final CacheControllerDispatcher cacheControllerDispatcher,
+                         final TenantUserApi tenantApi,
+                         final RecordIdApi recordIdApi,
+                         final PersistentBus persistentBus,
+                         final NotificationQueueService notificationQueueService,
+                         final Clock clock,
+                         final Context context) {
         super(uriBuilder, tagUserApi, customFieldUserApi, auditUserApi, accountUserApi, paymentApi, null, clock, context);
         this.adminPaymentApi = adminPaymentApi;
+        this.invoiceUserApi = invoiceUserApi;
         this.tenantApi = tenantApi;
         this.recordIdApi = recordIdApi;
-        this.cacheManager = cacheManager;
+        this.cacheControllerDispatcher = cacheControllerDispatcher;
+        this.persistentBus = persistentBus;
+        this.notificationQueueService = notificationQueueService;
     }
 
+    @GET
+    @Path("/queues")
+    @Produces(APPLICATION_JSON)
+    @ApiOperation(value = "Get queues entries", response = Response.class)
+    @ApiResponses(value = {})
+    public Response getQueueEntries(@QueryParam("accountId") final String accountIdStr,
+                                    @QueryParam("queueName") final String queueName,
+                                    @QueryParam("serviceName") final String serviceName,
+                                    @QueryParam("withHistory") @DefaultValue("true") final Boolean withHistory,
+                                    @QueryParam("minDate") final String minDateOrNull,
+                                    @QueryParam("maxDate") final String maxDateOrNull,
+                                    @QueryParam("withInProcessing") @DefaultValue("true") final Boolean withInProcessing,
+                                    @QueryParam("withBusEvents") @DefaultValue("true") final Boolean withBusEvents,
+                                    @QueryParam("withNotifications") @DefaultValue("true") final Boolean withNotifications,
+                                    @javax.ws.rs.core.Context final HttpServletRequest request) {
+        final TenantContext tenantContext = context.createContext(request);
+        final Long tenantRecordId = recordIdApi.getRecordId(tenantContext.getTenantId(), ObjectType.TENANT, tenantContext);
+        final Long accountRecordId = Strings.isNullOrEmpty(accountIdStr) ? null : recordIdApi.getRecordId(UUID.fromString(accountIdStr), ObjectType.ACCOUNT, tenantContext);
+
+        // Limit search results by default
+        final DateTime minDate = Strings.isNullOrEmpty(minDateOrNull) ? clock.getUTCNow().minusDays(2) : DATE_TIME_FORMATTER.parseDateTime(minDateOrNull).toDateTime(DateTimeZone.UTC);
+        final DateTime maxDate = Strings.isNullOrEmpty(maxDateOrNull) ? clock.getUTCNow().plusDays(2) : DATE_TIME_FORMATTER.parseDateTime(maxDateOrNull).toDateTime(DateTimeZone.UTC);
+
+        final StreamingOutput json = new StreamingOutput() {
+            @Override
+            public void write(final OutputStream output) throws IOException, WebApplicationException {
+                Iterator<BusEventWithMetadata<BusEvent>> busEventsIterator = null;
+                Iterator<NotificationEventWithMetadata<NotificationEvent>> notificationsIterator = null;
+
+                try {
+                    final JsonGenerator generator = mapper.getFactory().createGenerator(output);
+                    generator.configure(JsonGenerator.Feature.AUTO_CLOSE_TARGET, false);
+
+                    generator.writeStartObject();
+
+                    if (withBusEvents) {
+                        generator.writeFieldName("busEvents");
+                        generator.writeStartArray();
+                        busEventsIterator = getBusEvents(withInProcessing, withHistory, minDate, maxDate, accountRecordId, tenantRecordId).iterator();
+                        while (busEventsIterator.hasNext()) {
+                            final BusEventWithMetadata<BusEvent> busEvent = busEventsIterator.next();
+                            generator.writeObject(new BusEventWithRichMetadata(busEvent));
+                        }
+                        generator.writeEndArray();
+                    }
+
+                    if (withNotifications) {
+                        generator.writeFieldName("notifications");
+                        generator.writeStartArray();
+
+                        notificationsIterator = getNotifications(queueName, serviceName, withInProcessing, withHistory, minDate, maxDate, accountRecordId, tenantRecordId).iterator();
+                        while (notificationsIterator.hasNext()) {
+                            final NotificationEventWithMetadata<NotificationEvent> notification = notificationsIterator.next();
+                            generator.writeObject(notification);
+                        }
+                        generator.writeEndArray();
+                    }
+
+                    generator.writeEndObject();
+                    generator.close();
+                } finally {
+                    // In case the client goes away (IOException), make sure to close the underlying DB connection
+                    if (busEventsIterator != null) {
+                        while (busEventsIterator.hasNext()) {
+                            busEventsIterator.next();
+                        }
+                    }
+                    if (notificationsIterator != null) {
+                        while (notificationsIterator.hasNext()) {
+                            notificationsIterator.next();
+                        }
+                    }
+                }
+            }
+        };
+
+        return Response.status(Status.OK).entity(json).build();
+    }
 
     @PUT
     @Consumes(APPLICATION_JSON)
@@ -123,26 +253,90 @@ public class AdminResource extends JaxRsResourceBase {
         return Response.status(Status.OK).build();
     }
 
+    @POST
+    @Consumes(APPLICATION_JSON)
+    @Produces(APPLICATION_JSON)
+    @Path("/invoices")
+    @ApiOperation(value = "Trigger an invoice generation for all parked accounts")
+    @ApiResponses(value = {})
+    public Response triggerInvoiceGenerationForParkedAccounts(@QueryParam(QUERY_SEARCH_OFFSET) @DefaultValue("0") final Long offset,
+                                                              @QueryParam(QUERY_SEARCH_LIMIT) @DefaultValue("100") final Long limit,
+                                                              @HeaderParam(HDR_CREATED_BY) final String createdBy,
+                                                              @HeaderParam(HDR_REASON) final String reason,
+                                                              @HeaderParam(HDR_COMMENT) final String comment,
+                                                              @javax.ws.rs.core.Context final HttpServletRequest request) {
+        final CallContext callContext = context.createContext(createdBy, reason, comment, request);
+
+        // TODO Consider adding a real invoice API post 0.18.x
+        final Pagination<Tag> tags = tagUserApi.searchTags(SystemTags.PARK_TAG_DEFINITION_NAME, offset, limit, callContext);
+        final Iterator<Tag> iterator = tags.iterator();
+
+        final StreamingOutput json = new StreamingOutput() {
+            @Override
+            public void write(final OutputStream output) throws IOException, WebApplicationException {
+                try {
+                    final JsonGenerator generator = mapper.getFactory().createGenerator(output);
+                    generator.configure(JsonGenerator.Feature.AUTO_CLOSE_TARGET, false);
+
+                    generator.writeStartObject();
+                    while (iterator.hasNext()) {
+                        final Tag tag = iterator.next();
+                        final UUID accountId = tag.getObjectId();
+                        try {
+                            invoiceUserApi.triggerInvoiceGeneration(accountId, clock.getUTCToday(), null, callContext);
+                            generator.writeStringField(accountId.toString(), OK);
+                        } catch (final InvoiceApiException e) {
+                            if (e.getCode() != ErrorCode.INVOICE_NOTHING_TO_DO.getCode()) {
+                                log.warn("Unable to trigger invoice generation for accountId='{}'", accountId);
+                            }
+                            generator.writeStringField(accountId.toString(), ErrorCode.fromCode(e.getCode()).toString());
+                        }
+                    }
+                    generator.writeEndObject();
+                    generator.close();
+                } finally {
+                    // In case the client goes away (IOException), make sure to close the underlying DB connection
+                    while (iterator.hasNext()) {
+                        iterator.next();
+                    }
+                }
+            }
+        };
+
+        final URI nextPageUri = uriBuilder.nextPage(AdminResource.class,
+                                                    "triggerInvoiceGenerationForParkedAccounts",
+                                                    tags.getNextOffset(),
+                                                    limit,
+                                                    ImmutableMap.<String, String>of());
+        return Response.status(Status.OK)
+                       .entity(json)
+                       .header(HDR_PAGINATION_CURRENT_OFFSET, tags.getCurrentOffset())
+                       .header(HDR_PAGINATION_NEXT_OFFSET, tags.getNextOffset())
+                       .header(HDR_PAGINATION_TOTAL_NB_RECORDS, tags.getTotalNbRecords())
+                       .header(HDR_PAGINATION_MAX_NB_RECORDS, tags.getMaxNbRecords())
+                       .header(HDR_PAGINATION_NEXT_PAGE_URI, nextPageUri)
+                       .build();
+    }
+
     @DELETE
     @Path("/" + CACHE)
     @Produces(APPLICATION_JSON)
     @ApiOperation(value = "Invalidates the given Cache if specified, otherwise invalidates all caches")
     @ApiResponses(value = {@ApiResponse(code = 400, message = "Cache name does not exist or is not alive")})
     public Response invalidatesCache(@QueryParam("cacheName") final String cacheName,
-                                    @javax.ws.rs.core.Context final HttpServletRequest request) {
+                                     @javax.ws.rs.core.Context final HttpServletRequest request) {
         if (null != cacheName && !cacheName.isEmpty()) {
-            final Ehcache cache = cacheManager.getEhcache(cacheName);
-            // check if cache is null
-            if (cache == null) {
+            // Clear given cache
+            final CacheType cacheType = CacheType.findByName(cacheName);
+            if (cacheType != null) {
+                cacheControllerDispatcher.getCacheController(cacheType).removeAll();
+            } else {
                 log.warn("Cache for specified cacheName='{}' does not exist or is not alive", cacheName);
                 return Response.status(Status.BAD_REQUEST).build();
             }
-            // Clear given cache
-            cache.removeAll();
-        }
-        else {
+        } else {
             // if not given a specific cacheName, clear all
-            cacheManager.clearAll();
+            cacheControllerDispatcher.clearAll();
         }
         return Response.status(Status.OK).build();
     }
@@ -152,20 +346,23 @@ public class AdminResource extends JaxRsResourceBase {
     @Produces(APPLICATION_JSON)
     @ApiOperation(value = "Invalidates Caches per account level")
     @ApiResponses(value = {})
-    public Response invalidatesCacheByAccount(@PathParam("accountId") final String accountId,
+    public Response invalidatesCacheByAccount(@PathParam("accountId") final String accountIdStr,
                                               @javax.ws.rs.core.Context final HttpServletRequest request) {
+        final TenantContext tenantContext = context.createContext(request);
+        final UUID accountId = UUID.fromString(accountIdStr);
+        final Long accountRecordId = recordIdApi.getRecordId(accountId, ObjectType.ACCOUNT, tenantContext);
 
-        // clear account-record-id cache by accountId
-        final Ehcache accountRecordIdCache = cacheManager.getEhcache(CacheType.ACCOUNT_RECORD_ID.getCacheName());
-        accountRecordIdCache.remove(accountId);
+        // clear account-record-id cache by accountId (note: String!)
+        final CacheController<String, Long> accountRecordIdCacheController = cacheControllerDispatcher.getCacheController(CacheType.ACCOUNT_RECORD_ID);
+        accountRecordIdCacheController.remove(accountIdStr);
 
-        // clear account-immutable cache by accountId
-        final Ehcache accountImmutableCache = cacheManager.getEhcache(CacheType.ACCOUNT_IMMUTABLE.getCacheName());
-        accountImmutableCache.remove(UUID.fromString(accountId));
+        // clear account-immutable cache by account record id
+        final CacheController<Long, ImmutableAccountData> accountImmutableCacheController = cacheControllerDispatcher.getCacheController(CacheType.ACCOUNT_IMMUTABLE);
+        accountImmutableCacheController.remove(accountRecordId);
 
-        // clear account-bcd cache by accountId
-        final Ehcache accountBcdCache = cacheManager.getEhcache(CacheType.ACCOUNT_BCD.getCacheName());
-        accountBcdCache.remove(UUID.fromString(accountId));
+        // clear account-bcd cache by accountId (note: UUID!)
+        final CacheController<UUID, Integer> accountBCDCacheController = cacheControllerDispatcher.getCacheController(CacheType.ACCOUNT_BCD);
+        accountBCDCacheController.remove(accountId);
 
         return Response.status(Status.OK).build();
     }
@@ -176,53 +373,153 @@ public class AdminResource extends JaxRsResourceBase {
     @ApiOperation(value = "Invalidates Caches per tenant level")
     @ApiResponses(value = {})
     public Response invalidatesCacheByTenant(@QueryParam("tenantApiKey") final String tenantApiKey,
-                                              @javax.ws.rs.core.Context final HttpServletRequest request) throws TenantApiException {
+                                             @javax.ws.rs.core.Context final HttpServletRequest request) throws TenantApiException {
 
         // creating Tenant Context from Request
-        TenantContext tenantContext = context.createContext(request);
+        final TenantContext tenantContext = context.createContext(request);
 
-        Tenant currentTenant = tenantApi.getTenantById(tenantContext.getTenantId());
+        final Tenant currentTenant = tenantApi.getTenantById(tenantContext.getTenantId());
 
         // getting Tenant Record Id
-        Long tenantRecordId = recordIdApi.getRecordId(tenantContext.getTenantId(), ObjectType.TENANT, tenantContext);
+        final Long tenantRecordId = recordIdApi.getRecordId(tenantContext.getTenantId(), ObjectType.TENANT, tenantContext);
+
+        final Function<String, Boolean> tenantKeysMatcher = new Function<String, Boolean>() {
+            @Override
+            public Boolean apply(@Nullable final String key) {
+                return key != null && key.endsWith("::" + tenantRecordId);
+            }
+        };
 
         // clear tenant-record-id cache by tenantId
-        final Ehcache tenantRecordIdCache = cacheManager.getEhcache(CacheType.TENANT_RECORD_ID.getCacheName());
-        tenantRecordIdCache.remove(currentTenant.getId().toString());
+        final CacheController<String, Long> tenantRecordIdCacheController = cacheControllerDispatcher.getCacheController(CacheType.TENANT_RECORD_ID);
+        tenantRecordIdCacheController.remove(currentTenant.getId().toString());
 
         // clear tenant-payment-state-machine-config cache by tenantRecordId
-        final Ehcache tenantPaymentStateMachineConfigCache = cacheManager.getEhcache(CacheType.TENANT_PAYMENT_STATE_MACHINE_CONFIG.getCacheName());
-        removeCacheByKey(tenantPaymentStateMachineConfigCache, tenantRecordId.toString());
+        final CacheController<String, Object> tenantPaymentStateMachineConfigCacheController = cacheControllerDispatcher.getCacheController(CacheType.TENANT_PAYMENT_STATE_MACHINE_CONFIG);
+        tenantPaymentStateMachineConfigCacheController.remove(tenantKeysMatcher);
 
         // clear tenant cache by tenantApiKey
-        final Ehcache tenantCache = cacheManager.getEhcache(CacheType.TENANT.getCacheName());
-        tenantCache.remove(currentTenant.getApiKey());
+        final CacheController<String, Tenant> tenantCacheController = cacheControllerDispatcher.getCacheController(CacheType.TENANT);
+        tenantCacheController.remove(currentTenant.getApiKey());
 
         // clear tenant-kv cache by tenantRecordId
-        final Ehcache tenantKvCache = cacheManager.getEhcache(CacheType.TENANT_KV.getCacheName());
-        removeCacheByKey(tenantKvCache, tenantRecordId.toString());
+        final CacheController<String, String> tenantKVCacheController = cacheControllerDispatcher.getCacheController(CacheType.TENANT_KV);
+        tenantKVCacheController.remove(tenantKeysMatcher);
 
         // clear tenant-config cache by tenantRecordId
-        final Ehcache tenantConfigCache = cacheManager.getEhcache(CacheType.TENANT_CONFIG.getCacheName());
-        tenantConfigCache.remove(tenantRecordId);
+        final CacheController<Long, PerTenantConfig> tenantConfigCacheController = cacheControllerDispatcher.getCacheController(CacheType.TENANT_CONFIG);
+        tenantConfigCacheController.remove(tenantRecordId);
 
         // clear tenant-overdue-config cache by tenantRecordId
-        final Ehcache tenantOverdueConfigCache = cacheManager.getEhcache(CacheType.TENANT_OVERDUE_CONFIG.getCacheName());
-        tenantOverdueConfigCache.remove(tenantRecordId);
+        final CacheController<Long, Object> tenantOverdueConfigCacheController = cacheControllerDispatcher.getCacheController(CacheType.TENANT_OVERDUE_CONFIG);
+        tenantOverdueConfigCacheController.remove(tenantRecordId);
 
         // clear tenant-catalog cache by tenantRecordId
-        final Ehcache tenantCatalogCache = cacheManager.getEhcache(CacheType.TENANT_CATALOG.getCacheName());
-        tenantCatalogCache.remove(tenantRecordId);
+        final CacheController<Long, Catalog> tenantCatalogCacheController = cacheControllerDispatcher.getCacheController(CacheType.TENANT_CATALOG);
+        tenantCatalogCacheController.remove(tenantRecordId);
 
         return Response.status(Status.OK).build();
     }
 
-    private void removeCacheByKey(final Ehcache tenantCache, final String tenantRecordId) {
-        for (Object key : tenantCache.getKeys()) {
-            if (null != key && key.toString().endsWith("::" + tenantRecordId)) {
-                tenantCache.remove(key);
+    private Iterable<NotificationEventWithMetadata<NotificationEvent>> getNotifications(@Nullable final String queueName,
+                                                                                        @Nullable final String serviceName,
+                                                                                        final boolean includeInProcessing,
+                                                                                        final boolean includeHistory,
+                                                                                        @Nullable final DateTime minEffectiveDate,
+                                                                                        @Nullable final DateTime maxEffectiveDate,
+                                                                                        @Nullable final Long accountRecordId,
+                                                                                        final Long tenantRecordId) {
+        Iterable<NotificationEventWithMetadata<NotificationEvent>> notifications = ImmutableList.<NotificationEventWithMetadata<NotificationEvent>>of();
+        for (final NotificationQueue notificationQueue : notificationQueueService.getNotificationQueues()) {
+            if (queueName != null && !queueName.equals(notificationQueue.getQueueName())) {
+                continue;
+            } else if (serviceName != null && !serviceName.equals(notificationQueue.getServiceName())) {
+                continue;
+            }
+
+            if (includeInProcessing) {
+                if (accountRecordId != null) {
+                    notifications = Iterables.<NotificationEventWithMetadata<NotificationEvent>>concat(notifications,
+                                                                                                       notificationQueue.getFutureOrInProcessingNotificationForSearchKeys(accountRecordId, tenantRecordId));
+                } else {
+                    notifications = Iterables.<NotificationEventWithMetadata<NotificationEvent>>concat(notifications,
+                                                                                                       notificationQueue.getFutureOrInProcessingNotificationForSearchKey2(maxEffectiveDate, tenantRecordId));
+                }
+            } else {
+                if (accountRecordId != null) {
+                    notifications = Iterables.<NotificationEventWithMetadata<NotificationEvent>>concat(notifications,
+                                                                                                       notificationQueue.getFutureNotificationForSearchKeys(accountRecordId, tenantRecordId));
+                } else {
+                    notifications = Iterables.<NotificationEventWithMetadata<NotificationEvent>>concat(notifications,
+                                                                                                       notificationQueue.getFutureNotificationForSearchKey2(maxEffectiveDate, tenantRecordId));
+                }
+            }
+
+            if (includeHistory) {
+                if (accountRecordId != null) {
+                    notifications = Iterables.<NotificationEventWithMetadata<NotificationEvent>>concat(notificationQueue.getHistoricalNotificationForSearchKeys(accountRecordId, tenantRecordId),
+                                                                                                       notifications);
+                } else {
+                    notifications = Iterables.<NotificationEventWithMetadata<NotificationEvent>>concat(notificationQueue.getHistoricalNotificationForSearchKey2(minEffectiveDate, tenantRecordId),
+                                                                                                       notifications);
+                }
             }
         }
+
+        // Note: entries are properly ordered by queue, but not cross queues unfortunately
+        return notifications;
     }
 
+    private Iterable<BusEventWithMetadata<BusEvent>> getBusEvents(final boolean includeInProcessing,
+                                                                  final boolean includeHistory,
+                                                                  @Nullable final DateTime minCreatedDate,
+                                                                  @Nullable final DateTime maxCreatedDate,
+                                                                  @Nullable final Long accountRecordId,
+                                                                  final Long tenantRecordId) {
+        Iterable<BusEventWithMetadata<BusEvent>> busEvents = ImmutableList.<BusEventWithMetadata<BusEvent>>of();
+        if (includeInProcessing) {
+            if (accountRecordId != null) {
+                busEvents = Iterables.<BusEventWithMetadata<BusEvent>>concat(busEvents,
+                                                                             persistentBus.getAvailableOrInProcessingBusEventsForSearchKeys(accountRecordId, tenantRecordId));
+            } else {
+                busEvents = Iterables.<BusEventWithMetadata<BusEvent>>concat(busEvents,
+                                                                             persistentBus.getAvailableOrInProcessingBusEventsForSearchKey2(maxCreatedDate, tenantRecordId));
+            }
+        } else {
+            if (accountRecordId != null) {
+                busEvents = Iterables.<BusEventWithMetadata<BusEvent>>concat(busEvents,
+                                                                             persistentBus.getAvailableBusEventsForSearchKeys(accountRecordId, tenantRecordId));
+            } else {
+                busEvents = Iterables.<BusEventWithMetadata<BusEvent>>concat(busEvents,
+                                                                             persistentBus.getAvailableBusEventsForSearchKey2(maxCreatedDate, tenantRecordId));
+            }
+        }
+
+        if (includeHistory) {
+            if (accountRecordId != null) {
+                busEvents = Iterables.<BusEventWithMetadata<BusEvent>>concat(persistentBus.getHistoricalBusEventsForSearchKeys(accountRecordId, tenantRecordId),
+                                                                             busEvents);
+            } else {
+                busEvents = Iterables.<BusEventWithMetadata<BusEvent>>concat(persistentBus.getHistoricalBusEventsForSearchKey2(minCreatedDate, tenantRecordId),
+                                                                             busEvents);
+            }
+        }
+
+        // Note: entries are properly ordered by queue, but not cross queues unfortunately
+        return busEvents;
+    }
+
+    private class BusEventWithRichMetadata extends BusEventWithMetadata<BusEvent> {
+
+        private final String className;
+
+        public BusEventWithRichMetadata(final BusEventWithMetadata<BusEvent> event) {
+            super(event.getRecordId(), event.getUserToken(), event.getCreatedDate(), event.getSearchKey1(), event.getSearchKey2(), event.getEvent());
+            this.className = event.getEvent().getClass().getName();
+        }
+
+        public String getClassName() {
+            return className;
+        }
+    }
 }

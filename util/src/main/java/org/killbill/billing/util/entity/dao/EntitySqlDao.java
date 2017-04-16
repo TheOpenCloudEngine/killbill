@@ -45,8 +45,8 @@ public interface EntitySqlDao<M extends EntityModelDao<E>, E extends Entity> ext
 
     @SqlUpdate
     @Audited(ChangeType.INSERT)
-    public void create(@BindBean final M entity,
-                       @BindBean final InternalCallContext context) throws EntityPersistenceException;
+    public Object create(@BindBean final M entity,
+                         @BindBean final InternalCallContext context) throws EntityPersistenceException;
 
     @SqlQuery
     public M getById(@Bind("id") final String id,
@@ -73,6 +73,7 @@ public interface EntitySqlDao<M extends EntityModelDao<E>, E extends Entity> ext
                               @Bind("likeSearchKey") final String likeSearchKey,
                               @Bind("offset") final Long offset,
                               @Bind("rowCount") final Long rowCount,
+                              @Define("ordering") final String ordering,
                               @BindBean final InternalTenantContext context);
 
     @SqlQuery
@@ -89,6 +90,7 @@ public interface EntitySqlDao<M extends EntityModelDao<E>, E extends Entity> ext
     public Iterator<M> get(@Bind("offset") final Long offset,
                            @Bind("rowCount") final Long rowCount,
                            @Define("orderBy") final String orderBy,
+                           @Define("ordering") final String ordering,
                            @BindBean final InternalTenantContext context);
 
     @SqlQuery

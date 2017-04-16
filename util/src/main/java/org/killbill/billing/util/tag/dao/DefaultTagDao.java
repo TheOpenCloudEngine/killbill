@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.killbill.billing.util.callcontext.InternalCallContextFactory;
+import org.killbill.billing.util.entity.dao.DefaultPaginationSqlDaoHelper.Ordering;
 import org.skife.jdbi.v2.IDBI;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -166,13 +167,7 @@ public class DefaultTagDao extends EntityDaoBase<TagModelDao, Tag, TagApiExcepti
     }
 
     private TagDefinitionModelDao getTagDefinitionFromTransaction(final UUID tagDefinitionId, final EntitySqlDaoWrapperFactory entitySqlDaoWrapperFactory, final InternalTenantContext context) throws TagApiException {
-        TagDefinitionModelDao tagDefintion = null;
-        for (final ControlTagType t : ControlTagType.values()) {
-            if (t.getId().equals(tagDefinitionId)) {
-                tagDefintion = new TagDefinitionModelDao(t);
-                break;
-            }
-        }
+        TagDefinitionModelDao tagDefintion = SystemTags.lookup(tagDefinitionId);
         if (tagDefintion == null) {
             final TagDefinitionSqlDao transTagDefintionSqlDao = entitySqlDaoWrapperFactory.become(TagDefinitionSqlDao.class);
             tagDefintion = transTagDefintionSqlDao.getById(tagDefinitionId.toString(), context);
@@ -230,8 +225,8 @@ public class DefaultTagDao extends EntityDaoBase<TagModelDao, Tag, TagApiExcepti
                                                   }
 
                                                   @Override
-                                                  public Iterator<TagModelDao> build(final TagSqlDao tagSqlDao, final Long limit, final InternalTenantContext context) {
-                                                      return tagSqlDao.search(searchKey, String.format("%%%s%%", searchKey), offset, limit, context);
+                                                  public Iterator<TagModelDao> build(final TagSqlDao tagSqlDao, final Long offset, final Long limit, final Ordering ordering, final InternalTenantContext context) {
+                                                      return tagSqlDao.search(searchKey, String.format("%%%s%%", searchKey), offset, limit, ordering.toString(), context);
                                                   }
                                               },
                                               offset,

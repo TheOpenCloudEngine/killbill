@@ -1,6 +1,6 @@
 /*
- * Copyright 2014-2016 Groupon, Inc
- * Copyright 2014-2016 The Billing Project, LLC
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
  * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -28,7 +28,6 @@ import org.killbill.billing.account.api.AccountInternalApi;
 import org.killbill.billing.callcontext.InternalCallContext;
 import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.events.PaymentInternalEvent;
-import org.killbill.billing.osgi.api.OSGIServiceRegistration;
 import org.killbill.billing.payment.api.PaymentApiException;
 import org.killbill.billing.payment.api.TransactionStatus;
 import org.killbill.billing.payment.core.sm.PaymentControlStateMachineHelper;
@@ -40,7 +39,6 @@ import org.killbill.billing.payment.dao.PaymentDao;
 import org.killbill.billing.payment.dao.PaymentTransactionModelDao;
 import org.killbill.billing.payment.dao.PluginPropertySerializer;
 import org.killbill.billing.payment.dao.PluginPropertySerializer.PluginPropertySerializerException;
-import org.killbill.billing.payment.plugin.api.PaymentPluginApi;
 import org.killbill.billing.util.callcontext.CallContext;
 import org.killbill.billing.util.callcontext.InternalCallContextFactory;
 import org.killbill.billing.util.config.definition.PaymentConfig;
@@ -82,9 +80,8 @@ public class IncompletePaymentAttemptTask extends CompletionTaskBase<PaymentAtte
                                         final PaymentControlStateMachineHelper retrySMHelper,
                                         final AccountInternalApi accountInternalApi,
                                         final PluginControlPaymentAutomatonRunner pluginControlledPaymentAutomatonRunner,
-                                        final OSGIServiceRegistration<PaymentPluginApi> pluginRegistry,
                                         final GlobalLocker locker) {
-        super(internalCallContextFactory, paymentConfig, paymentDao, clock, paymentStateMachineHelper, retrySMHelper, accountInternalApi, pluginRegistry, locker);
+        super(internalCallContextFactory, paymentConfig, paymentDao, clock, paymentStateMachineHelper, retrySMHelper, accountInternalApi, locker);
         this.pluginControlledPaymentAutomatonRunner = pluginControlledPaymentAutomatonRunner;
     }
 
@@ -117,17 +114,7 @@ public class IncompletePaymentAttemptTask extends CompletionTaskBase<PaymentAtte
             log.warn("Found {} transactions for paymentAttempt {}", filteredTransactions.size(), attempt.getId());
         }
         final PaymentTransactionModelDao transaction = filteredTransactions.isEmpty() ? null : filteredTransactions.get(0);
-
-
-        // In those 3 cases (null transaction, PLUGIN_FAILURE and PAYMENT_FAILURE), we are taking a *shortcut* but this is incorrect; ideally we should call back the priorCall
-        // control plugins to decide what to do:
-        // * For null transaction and PLUGIN_FAILURE something went wrong before we could even make the payment, so possibly we should inform the control plugin
-        //   and retry
-        // * For PAYMENT_FAILURE, the payment went through but was denied by the gateway, and so this is a different case where a control plugin may want to retry
-        //
-        if (transaction == null ||
-            transaction.getTransactionStatus() == TransactionStatus.PLUGIN_FAILURE ||
-            transaction.getTransactionStatus() == TransactionStatus.PAYMENT_FAILURE) {
+        if (transaction == null) {
             log.info("Moving attemptId='{}' to ABORTED", attempt.getId());
             paymentDao.updatePaymentAttempt(attempt.getId(), attempt.getTransactionId(), "ABORTED", internalCallContext);
             return;
@@ -139,43 +126,40 @@ public class IncompletePaymentAttemptTask extends CompletionTaskBase<PaymentAtte
             return;
         }
 
-        // On SUCCESS, PENDING state we complete the payment control state machine, allowing to call the control plugin onSuccessCall API.
-        if (transaction.getTransactionStatus() == TransactionStatus.SUCCESS ||
-            transaction.getTransactionStatus() == TransactionStatus.PENDING) {
+        try {
+            log.info("Completing attemptId='{}'", attempt.getId());
 
-            try {
-                log.info("Moving attemptId='{}' to SUCCESS", attempt.getId());
+            final Account account = accountInternalApi.getAccountById(attempt.getAccountId(), tenantContext);
+            final boolean isApiPayment = true; // unclear
+            final PaymentStateControlContext paymentStateContext = new PaymentStateControlContext(attempt.toPaymentControlPluginNames(),
+                                                                                                  isApiPayment,
+                                                                                                  null,
+                                                                                                  transaction.getPaymentId(),
+                                                                                                  attempt.getPaymentExternalKey(),
+                                                                                                  transaction.getId(),
+                                                                                                  transaction.getTransactionExternalKey(),
+                                                                                                  transaction.getTransactionType(),
+                                                                                                  account,
+                                                                                                  attempt.getPaymentMethodId(),
+                                                                                                  transaction.getAmount(),
+                                                                                                  transaction.getCurrency(),
+                                                                                                  PluginPropertySerializer.deserialize(attempt.getPluginProperties()),
+                                                                                                  internalCallContext,
+                                                                                                  callContext);
 
-                final Account account = accountInternalApi.getAccountById(attempt.getAccountId(), tenantContext);
-                final boolean isApiPayment = true; // unclear
-                final PaymentStateControlContext paymentStateContext = new PaymentStateControlContext(attempt.toPaymentControlPluginNames(),
-                                                                                                      isApiPayment,
-                                                                                                      transaction.getPaymentId(),
-                                                                                                      attempt.getPaymentExternalKey(),
-                                                                                                      transaction.getTransactionExternalKey(),
-                                                                                                      transaction.getTransactionType(),
-                                                                                                      account,
-                                                                                                      attempt.getPaymentMethodId(),
-                                                                                                      transaction.getAmount(),
-                                                                                                      transaction.getCurrency(),
-                                                                                                      PluginPropertySerializer.deserialize(attempt.getPluginProperties()),
-                                                                                                      internalCallContext,
-                                                                                                      callContext);
-
-                paymentStateContext.setAttemptId(attempt.getId()); // Normally set by leavingState Callback
-                paymentStateContext.setPaymentTransactionModelDao(transaction); // Normally set by raw state machine
-                //
-                // Will rerun the state machine with special callbacks to only make the executePluginOnSuccessCalls call
-                // to the PaymentControlPluginApi plugin and transition the state.
-                //
-                pluginControlledPaymentAutomatonRunner.completeRun(paymentStateContext);
-            } catch (final AccountApiException e) {
-                log.warn("Error completing paymentAttemptId='{}'", attempt.getId(), e);
-            } catch (final PluginPropertySerializerException e) {
-                log.warn("Error completing paymentAttemptId='{}'", attempt.getId(), e);
-            } catch (final PaymentApiException e) {
-                log.warn("Error completing paymentAttemptId='{}'", attempt.getId(), e);
-            }
+            paymentStateContext.setAttemptId(attempt.getId()); // Normally set by leavingState Callback
+            paymentStateContext.setPaymentTransactionModelDao(transaction); // Normally set by raw state machine
+            //
+            // Will rerun the state machine with special callbacks to only make the executePluginOnSuccessCalls / executePluginOnFailureCalls calls
+            // to the PaymentControlPluginApi plugin and transition the state.
+            //
+            pluginControlledPaymentAutomatonRunner.completeRun(paymentStateContext);
+        } catch (final AccountApiException e) {
+            log.warn("Error completing paymentAttemptId='{}'", attempt.getId(), e);
+        } catch (final PluginPropertySerializerException e) {
+            log.warn("Error completing paymentAttemptId='{}'", attempt.getId(), e);
+        } catch (final PaymentApiException e) {
+            log.warn("Error completing paymentAttemptId='{}'", attempt.getId(), e);
         }
     }
 

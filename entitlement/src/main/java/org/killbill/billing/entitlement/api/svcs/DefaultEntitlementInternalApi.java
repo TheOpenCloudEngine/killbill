@@ -32,7 +32,9 @@ import javax.annotation.Nullable;
 import javax.inject.Inject;
 
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
+import org.killbill.billing.account.api.AccountApiException;
 import org.killbill.billing.account.api.AccountInternalApi;
 import org.killbill.billing.callcontext.InternalCallContext;
 import org.killbill.billing.callcontext.InternalTenantContext;
@@ -75,6 +77,7 @@ import org.killbill.notificationq.api.NotificationQueueService;
 import org.killbill.notificationq.api.NotificationQueueService.NoSuchNotificationQueue;
 
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 
 public class DefaultEntitlementInternalApi extends DefaultEntitlementApiBase implements EntitlementInternalApi {
@@ -95,6 +98,21 @@ public class DefaultEntitlementInternalApi extends DefaultEntitlementApiBase imp
 
     @Override
     public void cancel(final Iterable<Entitlement> entitlements, @Nullable final LocalDate effectiveDate, final BillingActionPolicy billingPolicy, final Iterable<PluginProperty> properties, final InternalCallContext internalCallContext) throws EntitlementApiException {
+
+        if (!entitlements.iterator().hasNext()) {
+            return;
+        }
+
+        int bcd = 0;
+        DateTimeZone accountTimeZone = null;
+        try {
+            bcd = accountApi.getBCD(entitlements.iterator().next().getAccountId(), internalCallContext);
+            accountTimeZone = accountApi.getImmutableAccountDataByRecordId(internalCallContext. getAccountRecordId(), internalCallContext).getTimeZone();
+        } catch (final AccountApiException e) {
+            throw new EntitlementApiException(e);
+        }
+        Preconditions.checkState(bcd > 0 && accountTimeZone != null, "Unexpected condition where account info could not be retrieved");
+
         final CallContext callContext = internalCallContextFactory.createCallContext(internalCallContext);
 
         final ImmutableMap.Builder<BlockingState, Optional<UUID>> blockingStates = new ImmutableMap.Builder<BlockingState, Optional<UUID>>();
@@ -128,19 +146,20 @@ public class DefaultEntitlementInternalApi extends DefaultEntitlementApiBase imp
                                                                                    callContext);
             pluginContexts.add(pluginContext);
 
-            final DefaultEntitlement defaultEntitlement = getDefaultEntitlement(entitlement, internalCallContext);
-            final WithEntitlementPlugin<Entitlement> cancelEntitlementWithPlugin = new WithDateOverrideBillingPolicyEntitlementCanceler(defaultEntitlement,
+            final WithEntitlementPlugin<Entitlement> cancelEntitlementWithPlugin = new WithDateOverrideBillingPolicyEntitlementCanceler((DefaultEntitlement) entitlement,
                                                                                                                                         blockingStates,
                                                                                                                                         notificationEvents,
                                                                                                                                         callContext,
                                                                                                                                         internalCallContext);
             callbacks.add(cancelEntitlementWithPlugin);
 
-            subscriptions.add(defaultEntitlement.getSubscriptionBase());
+            subscriptions.add(((DefaultEntitlement) entitlement).getSubscriptionBase());
         }
 
         final Callable<Void> preCallbacksCallback = new BulkSubscriptionBaseCancellation(subscriptions,
                                                                                          billingPolicy,
+                                                                                         accountTimeZone,
+                                                                                         bcd,
                                                                                          internalCallContext);
 
         pluginExecution.executeWithPlugin(preCallbacksCallback, callbacks, pluginContexts);
@@ -168,34 +187,30 @@ public class DefaultEntitlementInternalApi extends DefaultEntitlementApiBase imp
         }
     }
 
-    // For forward-compatibility
-    private DefaultEntitlement getDefaultEntitlement(final Entitlement entitlement, final InternalTenantContext context) throws EntitlementApiException {
-        if (entitlement instanceof DefaultEntitlement) {
-            return (DefaultEntitlement) entitlement;
-        } else {
-            // Safe cast
-            return (DefaultEntitlement) getEntitlementForId(entitlement.getId(), context);
-        }
-    }
-
     private class BulkSubscriptionBaseCancellation implements Callable<Void> {
 
         private final Iterable<SubscriptionBase> subscriptions;
         private final BillingActionPolicy billingPolicy;
+        private final DateTimeZone accountTimeZone;
+        private final int accountBillCycleDayLocal;
         private final InternalCallContext callContext;
 
         public BulkSubscriptionBaseCancellation(final Iterable<SubscriptionBase> subscriptions,
                                                 final BillingActionPolicy billingPolicy,
+                                                final DateTimeZone accountTimeZone,
+                                                final int accountBillCycleDayLocal,
                                                 final InternalCallContext callContext) {
             this.subscriptions = subscriptions;
             this.billingPolicy = billingPolicy;
+            this.accountTimeZone = accountTimeZone;
+            this.accountBillCycleDayLocal = accountBillCycleDayLocal;
             this.callContext = callContext;
         }
 
         @Override
         public Void call() throws Exception {
             try {
-                subscriptionInternalApi.cancelBaseSubscriptions(subscriptions, billingPolicy, callContext);
+                subscriptionInternalApi.cancelBaseSubscriptions(subscriptions, billingPolicy, accountTimeZone, accountBillCycleDayLocal, callContext);
             } catch (final SubscriptionBaseApiException e) {
                 throw new EntitlementApiException(e);
             }
@@ -228,10 +243,19 @@ public class DefaultEntitlementInternalApi extends DefaultEntitlementApiBase imp
         @Override
         public Entitlement doCall(final EntitlementApi entitlementApi, final EntitlementContext updatedPluginContext) throws EntitlementApiException {
             DateTime effectiveDate = dateHelper.fromLocalDateAndReferenceTime(updatedPluginContext.getBaseEntitlementWithAddOnsSpecifiers().iterator().next().getEntitlementEffectiveDate(), internalCallContext);
-            // Avoid timing issues for IMM cancellations (we don't want an entitlement cancel date one second or so after the subscription cancel date or
-            // add-ons cancellations computations won't work).
-            if (effectiveDate.compareTo(entitlement.getSubscriptionBase().getEndDate()) > 0) {
-                effectiveDate = entitlement.getSubscriptionBase().getEndDate();
+
+            //
+            // If the entitlementDate provided is ahead we default to the effective subscriptionBase cancellationDate to avoid weird timing issues.
+            //
+            // (Note that entitlement.getSubscriptionBase() returns the right state (although we did not refresh context) because the DefaultSubscriptionBaseApiService#doCancelPlan
+            //  rebuild transitions on that same  DefaultSubscriptionBase object)
+            //
+            final DateTime subscriptionBaseCancellationDate = entitlement.getSubscriptionBase().getEndDate() != null ?
+                                                              entitlement.getSubscriptionBase().getEndDate() :
+                                                              entitlement.getSubscriptionBase().getFutureEndDate();
+
+            if (effectiveDate.compareTo(subscriptionBaseCancellationDate) > 0) {
+                effectiveDate = subscriptionBaseCancellationDate;
             }
 
             final BlockingState newBlockingState = new DefaultBlockingState(entitlement.getId(), BlockingStateType.SUBSCRIPTION, DefaultEntitlementApi.ENT_STATE_CANCELLED, EntitlementService.ENTITLEMENT_SERVICE_NAME, true, true, false, effectiveDate);

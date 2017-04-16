@@ -1,7 +1,7 @@
 /*
  * Copyright 2010-2013 Ning, Inc.
- * Copyright 2014-2016 Groupon, Inc
- * Copyright 2014-2016 The Billing Project, LLC
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
  * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -19,16 +19,19 @@
 package org.killbill.billing.payment.dao;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 
 import org.joda.time.DateTime;
+import org.killbill.billing.ErrorCode;
 import org.killbill.billing.callcontext.InternalCallContext;
 import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.catalog.api.Currency;
@@ -38,17 +41,21 @@ import org.killbill.billing.payment.api.DefaultPaymentErrorEvent;
 import org.killbill.billing.payment.api.DefaultPaymentInfoEvent;
 import org.killbill.billing.payment.api.DefaultPaymentPluginErrorEvent;
 import org.killbill.billing.payment.api.Payment;
+import org.killbill.billing.payment.api.PaymentApiException;
 import org.killbill.billing.payment.api.PaymentMethod;
 import org.killbill.billing.payment.api.PaymentTransaction;
 import org.killbill.billing.payment.api.TransactionStatus;
 import org.killbill.billing.payment.api.TransactionType;
+import org.killbill.billing.payment.core.sm.PaymentStateMachineHelper;
 import org.killbill.billing.util.cache.CacheControllerDispatcher;
 import org.killbill.billing.util.callcontext.InternalCallContextFactory;
 import org.killbill.billing.util.dao.NonEntityDao;
 import org.killbill.billing.util.entity.Entity;
 import org.killbill.billing.util.entity.Pagination;
 import org.killbill.billing.util.entity.dao.DefaultPaginationSqlDaoHelper;
+import org.killbill.billing.util.entity.dao.DefaultPaginationSqlDaoHelper.Ordering;
 import org.killbill.billing.util.entity.dao.DefaultPaginationSqlDaoHelper.PaginationIteratorBuilder;
+import org.killbill.billing.util.entity.dao.EntityDaoBase;
 import org.killbill.billing.util.entity.dao.EntitySqlDaoTransactionWrapper;
 import org.killbill.billing.util.entity.dao.EntitySqlDaoTransactionalJdbiWrapper;
 import org.killbill.billing.util.entity.dao.EntitySqlDaoWrapperFactory;
@@ -66,11 +73,10 @@ import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 
-public class DefaultPaymentDao implements PaymentDao {
+public class DefaultPaymentDao extends EntityDaoBase<PaymentModelDao, Payment, PaymentApiException> implements PaymentDao {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultPaymentDao.class);
 
-    private final EntitySqlDaoTransactionalJdbiWrapper transactionalSqlDao;
     private final DefaultPaginationSqlDaoHelper paginationHelper;
     private final PersistentBus eventBus;
     private final Clock clock;
@@ -78,7 +84,7 @@ public class DefaultPaymentDao implements PaymentDao {
     @Inject
     public DefaultPaymentDao(final IDBI dbi, final Clock clock, final CacheControllerDispatcher cacheControllerDispatcher,
                              final NonEntityDao nonEntityDao, final InternalCallContextFactory internalCallContextFactory, final PersistentBus eventBus) {
-        this.transactionalSqlDao = new EntitySqlDaoTransactionalJdbiWrapper(dbi, clock, cacheControllerDispatcher, nonEntityDao, internalCallContextFactory);
+        super(new EntitySqlDaoTransactionalJdbiWrapper(dbi, clock, cacheControllerDispatcher, nonEntityDao, internalCallContextFactory), PaymentSqlDao.class);
         this.paginationHelper = new DefaultPaginationSqlDaoHelper(transactionalSqlDao);
         this.eventBus = eventBus;
         this.clock = clock;
@@ -101,9 +107,7 @@ public class DefaultPaymentDao implements PaymentDao {
             @Override
             public PaymentAttemptModelDao inTransaction(final EntitySqlDaoWrapperFactory entitySqlDaoWrapperFactory) throws Exception {
                 final PaymentAttemptSqlDao transactional = entitySqlDaoWrapperFactory.become(PaymentAttemptSqlDao.class);
-                transactional.create(attempt, context);
-                final PaymentAttemptModelDao result = transactional.getById(attempt.getId().toString(), context);
-                return result;
+                return createAndRefresh(transactional, attempt, context);
             }
         });
     }
@@ -145,8 +149,8 @@ public class DefaultPaymentDao implements PaymentDao {
                                                       return sqlDao.getCountByStateNameAcrossTenants(stateName, createdBefore);
                                                   }
                                                   @Override
-                                                  public Iterator<PaymentAttemptModelDao> build(final PaymentAttemptSqlDao sqlDao, final Long limit, final InternalTenantContext context) {
-                                                      return sqlDao.getByStateNameAcrossTenants(stateName, createdBefore, offset, limit);
+                                                  public Iterator<PaymentAttemptModelDao> build(final PaymentAttemptSqlDao sqlDao, final Long offset, final Long limit, final Ordering ordering, final InternalTenantContext context) {
+                                                      return sqlDao.getByStateNameAcrossTenants(stateName, createdBefore, offset, limit, ordering.toString());
                                                   }
                                               },
                                               offset,
@@ -195,8 +199,8 @@ public class DefaultPaymentDao implements PaymentDao {
                                                   }
 
                                                   @Override
-                                                  public Iterator<PaymentTransactionModelDao> build(final TransactionSqlDao sqlDao, final Long limit, final InternalTenantContext context) {
-                                                      return sqlDao.getByTransactionStatusPriorDateAcrossTenants(allTransactionStatus, createdBefore, createdAfter, offset, limit);
+                                                  public Iterator<PaymentTransactionModelDao> build(final TransactionSqlDao sqlDao, final Long offset, final Long limit, final Ordering ordering, final InternalTenantContext context) {
+                                                      return sqlDao.getByTransactionStatusPriorDateAcrossTenants(allTransactionStatus, createdBefore, createdAfter, offset, limit, ordering.toString());
                                                   }
                                               },
                                               offset,
@@ -235,8 +239,8 @@ public class DefaultPaymentDao implements PaymentDao {
                                                   }
 
                                                   @Override
-                                                  public Iterator<PaymentModelDao> build(final PaymentSqlDao paymentSqlDao, final Long limit, final InternalTenantContext context) {
-                                                      final Iterator<PaymentModelDao> result = paymentSqlDao.getByPluginName(pluginName, offset, limit, context);
+                                                  public Iterator<PaymentModelDao> build(final PaymentSqlDao paymentSqlDao, final Long offset, final Long limit, final Ordering ordering, final InternalTenantContext context) {
+                                                      final Iterator<PaymentModelDao> result = paymentSqlDao.getByPluginName(pluginName, offset, limit, ordering.toString(), context);
                                                       return result;
                                                   }
                                               },
@@ -248,16 +252,20 @@ public class DefaultPaymentDao implements PaymentDao {
 
     @Override
     public Pagination<PaymentModelDao> searchPayments(final String searchKey, final Long offset, final Long limit, final InternalTenantContext context) {
+        // Optimization: if the search key looks like a state name (e.g. _ERRORED), assume the user is searching by state only
+        final List<String> paymentStates = expandSearchFilterToStateNames(searchKey);
+
+        final String likeSearchKey = String.format("%%%s%%", searchKey);
         return paginationHelper.getPagination(PaymentSqlDao.class,
                                               new PaginationIteratorBuilder<PaymentModelDao, Payment, PaymentSqlDao>() {
                                                   @Override
                                                   public Long getCount(final PaymentSqlDao paymentSqlDao, final InternalTenantContext context) {
-                                                      return paymentSqlDao.getSearchCount(searchKey, String.format("%%%s%%", searchKey), context);
+                                                      return !paymentStates.isEmpty() ? paymentSqlDao.getSearchByStateCount(paymentStates, context) : paymentSqlDao.getSearchCount(searchKey, likeSearchKey, context);
                                                   }
 
                                                   @Override
-                                                  public Iterator<PaymentModelDao> build(final PaymentSqlDao paymentSqlDao, final Long limit, final InternalTenantContext context) {
-                                                      return paymentSqlDao.search(searchKey, String.format("%%%s%%", searchKey), offset, limit, context);
+                                                  public Iterator<PaymentModelDao> build(final PaymentSqlDao paymentSqlDao, final Long offset, final Long limit, final Ordering ordering, final InternalTenantContext context) {
+                                                      return !paymentStates.isEmpty() ? paymentSqlDao.searchByState(paymentStates, offset, limit, ordering.toString(), context) : paymentSqlDao.search(searchKey, likeSearchKey, offset, limit, ordering.toString(), context);
                                                   }
                                               },
                                               offset,
@@ -265,17 +273,37 @@ public class DefaultPaymentDao implements PaymentDao {
                                               context);
     }
 
-    @Override
-    public PaymentModelDao insertPaymentWithFirstTransaction(final PaymentModelDao payment, final PaymentTransactionModelDao paymentTransaction, final InternalCallContext context) {
+    private List<String> expandSearchFilterToStateNames(final String searchKey) {
+        final Pattern pattern = Pattern.compile(".*" + searchKey + ".*");
 
-        return transactionalSqlDao.execute(new EntitySqlDaoTransactionWrapper<PaymentModelDao>() {
+        // Note that technically, we should look at all of the available state names in the database instead since the state machine is configurable. The common use-case
+        // is to override transitions though, not to introduce new states, and since some of it is already hardcoded in PaymentStateMachineHelper anyways, it's probably good enough for now.
+        final List<String> stateNames = new ArrayList<String>();
+        for (final String stateName : PaymentStateMachineHelper.STATE_NAMES) {
+            if (pattern.matcher(stateName).matches()) {
+                stateNames.add(stateName);
+            }
+        }
+        return stateNames;
+    }
+
+    @Override
+    public PaymentAndTransactionModelDao insertPaymentWithFirstTransaction(final PaymentModelDao payment, final PaymentTransactionModelDao paymentTransaction, final InternalCallContext context) {
+        final PaymentAndTransactionModelDao paymentAndTransactionModelDao = new PaymentAndTransactionModelDao();
+
+        return transactionalSqlDao.execute(new EntitySqlDaoTransactionWrapper<PaymentAndTransactionModelDao>() {
 
             @Override
-            public PaymentModelDao inTransaction(final EntitySqlDaoWrapperFactory entitySqlDaoWrapperFactory) throws Exception {
+            public PaymentAndTransactionModelDao inTransaction(final EntitySqlDaoWrapperFactory entitySqlDaoWrapperFactory) throws Exception {
                 final PaymentSqlDao paymentSqlDao = entitySqlDaoWrapperFactory.become(PaymentSqlDao.class);
-                paymentSqlDao.create(payment, context);
-                entitySqlDaoWrapperFactory.become(TransactionSqlDao.class).create(paymentTransaction, context);
-                return paymentSqlDao.getById(payment.getId().toString(), context);
+                final PaymentModelDao paymentModelDao = createAndRefresh(paymentSqlDao, payment, context);
+                paymentAndTransactionModelDao.setPaymentModelDao(paymentModelDao);
+
+                final TransactionSqlDao transactionSqlDao = entitySqlDaoWrapperFactory.become(TransactionSqlDao.class);
+                final PaymentTransactionModelDao paymentTransactionModelDao = createAndRefresh(transactionSqlDao, paymentTransaction, context);
+                paymentAndTransactionModelDao.setPaymentTransactionModelDao(paymentTransactionModelDao);
+
+                return paymentAndTransactionModelDao;
             }
         });
     }
@@ -286,8 +314,7 @@ public class DefaultPaymentDao implements PaymentDao {
             @Override
             public PaymentTransactionModelDao inTransaction(final EntitySqlDaoWrapperFactory entitySqlDaoWrapperFactory) throws Exception {
                 final TransactionSqlDao transactional = entitySqlDaoWrapperFactory.become(TransactionSqlDao.class);
-                transactional.create(paymentTransaction, context);
-                final PaymentTransactionModelDao paymentTransactionModelDao = transactional.getById(paymentTransaction.getId().toString(), context);
+                final PaymentTransactionModelDao paymentTransactionModelDao = createAndRefresh(transactional, paymentTransaction, context);
 
                 entitySqlDaoWrapperFactory.become(PaymentSqlDao.class).updatePaymentForNewTransaction(paymentId.toString(), contextWithUpdatedDate(context));
 
@@ -297,34 +324,50 @@ public class DefaultPaymentDao implements PaymentDao {
     }
 
     @Override
-    public void updatePaymentAndTransactionOnCompletion(final UUID accountId, @Nullable final UUID attemptId, final UUID paymentId, final TransactionType transactionType,
-                                                        final String currentPaymentStateName, @Nullable final String lastPaymentSuccessStateName,
-                                                        final UUID transactionId, final TransactionStatus transactionStatus,
-                                                        final BigDecimal processedAmount, final Currency processedCurrency,
-                                                        final String gatewayErrorCode, final String gatewayErrorMsg,
-                                                        final InternalCallContext context) {
-        transactionalSqlDao.execute(new EntitySqlDaoTransactionWrapper<Void>() {
+    public PaymentAndTransactionModelDao updatePaymentAndTransactionOnCompletion(final UUID accountId, @Nullable final UUID attemptId, final UUID paymentId, final TransactionType transactionType,
+                                                                                                    final String currentPaymentStateName, @Nullable final String lastPaymentSuccessStateName,
+                                                                                                    final UUID transactionId, final TransactionStatus transactionStatus,
+                                                                                                    final BigDecimal processedAmount, final Currency processedCurrency,
+                                                                                                    final String gatewayErrorCode, final String gatewayErrorMsg,
+                                                                                                    final InternalCallContext context) {
+        final PaymentAndTransactionModelDao paymentAndTransactionModelDao = new PaymentAndTransactionModelDao();
+
+        return transactionalSqlDao.execute(new EntitySqlDaoTransactionWrapper<PaymentAndTransactionModelDao>() {
 
             @Override
-            public Void inTransaction(final EntitySqlDaoWrapperFactory entitySqlDaoWrapperFactory) throws Exception {
+            public PaymentAndTransactionModelDao inTransaction(final EntitySqlDaoWrapperFactory entitySqlDaoWrapperFactory) throws Exception {
                 final InternalCallContext contextWithUpdatedDate = contextWithUpdatedDate(context);
+
                 final TransactionSqlDao transactional = entitySqlDaoWrapperFactory.become(TransactionSqlDao.class);
-                final PaymentTransactionModelDao paymentTransactionModelDao = transactional.getById(transactionId.toString(), context);
-                transactional.updateTransactionStatus(transactionId.toString(),
-                                                      attemptId == null ? (paymentTransactionModelDao.getAttemptId() == null ? null : paymentTransactionModelDao.getAttemptId().toString()) : attemptId.toString(),
-                                                      processedAmount,
-                                                      processedCurrency == null ? null : processedCurrency.toString(),
-                                                      transactionStatus == null ? null : transactionStatus.toString(),
-                                                      gatewayErrorCode,
-                                                      gatewayErrorMsg,
-                                                      contextWithUpdatedDate);
-                if (lastPaymentSuccessStateName != null) {
-                    entitySqlDaoWrapperFactory.become(PaymentSqlDao.class).updateLastSuccessPaymentStateName(paymentId.toString(), currentPaymentStateName, lastPaymentSuccessStateName, contextWithUpdatedDate);
+                final String updatedAttemptId;
+                if (attemptId == null) {
+                    final PaymentTransactionModelDao paymentTransactionModelDao = transactional.getById(transactionId.toString(), context);
+                    updatedAttemptId = paymentTransactionModelDao.getAttemptId() == null ? null : paymentTransactionModelDao.getAttemptId().toString();
                 } else {
-                    entitySqlDaoWrapperFactory.become(PaymentSqlDao.class).updatePaymentStateName(paymentId.toString(), currentPaymentStateName, contextWithUpdatedDate);
+                    updatedAttemptId = attemptId.toString();
                 }
+                final PaymentTransactionModelDao paymentTransactionModelDao = (PaymentTransactionModelDao) transactional.updateTransactionStatus(transactionId.toString(),
+                                                                                                                                                 updatedAttemptId,
+                                                                                                                                                 processedAmount,
+                                                                                                                                                 processedCurrency == null ? null : processedCurrency.toString(),
+                                                                                                                                                 transactionStatus == null ? null : transactionStatus.toString(),
+                                                                                                                                                 gatewayErrorCode,
+                                                                                                                                                 gatewayErrorMsg,
+                                                                                                                                                 contextWithUpdatedDate);
+                paymentAndTransactionModelDao.setPaymentTransactionModelDao(paymentTransactionModelDao);
+
+                final PaymentSqlDao paymentSqlDao = entitySqlDaoWrapperFactory.become(PaymentSqlDao.class);
+                final PaymentModelDao paymentModelDao;
+                if (lastPaymentSuccessStateName != null) {
+                    paymentModelDao = (PaymentModelDao) paymentSqlDao.updateLastSuccessPaymentStateName(paymentId.toString(), currentPaymentStateName, lastPaymentSuccessStateName, contextWithUpdatedDate);
+                } else {
+                    paymentModelDao = (PaymentModelDao) paymentSqlDao.updatePaymentStateName(paymentId.toString(), currentPaymentStateName, contextWithUpdatedDate);
+                }
+                paymentAndTransactionModelDao.setPaymentModelDao(paymentModelDao);
+
                 postPaymentEventFromTransaction(accountId, transactionStatus, transactionType, paymentId, transactionId, processedAmount, processedCurrency, clock.getUTCNow(), gatewayErrorCode, entitySqlDaoWrapperFactory, context);
-                return null;
+
+                return paymentAndTransactionModelDao;
             }
         });
     }
@@ -404,9 +447,7 @@ public class DefaultPaymentDao implements PaymentDao {
     private PaymentMethodModelDao insertPaymentMethodInTransaction(final EntitySqlDaoWrapperFactory entitySqlDaoWrapperFactory, final PaymentMethodModelDao paymentMethod, final InternalCallContext context)
             throws EntityPersistenceException {
         final PaymentMethodSqlDao transactional = entitySqlDaoWrapperFactory.become(PaymentMethodSqlDao.class);
-        transactional.create(paymentMethod, context);
-
-        return transactional.getById(paymentMethod.getId().toString(), context);
+        return createAndRefresh(transactional, paymentMethod, context);
     }
 
     @Override
@@ -469,8 +510,8 @@ public class DefaultPaymentDao implements PaymentDao {
                                                   }
 
                                                   @Override
-                                                  public Iterator<PaymentMethodModelDao> build(final PaymentMethodSqlDao paymentMethodSqlDao, final Long limit, final InternalTenantContext context) {
-                                                      return paymentMethodSqlDao.search(searchKey, String.format("%%%s%%", searchKey), offset, limit, context);
+                                                  public Iterator<PaymentMethodModelDao> build(final PaymentMethodSqlDao paymentMethodSqlDao, final Long offset, final Long limit, final Ordering ordering, final InternalTenantContext context) {
+                                                      return paymentMethodSqlDao.search(searchKey, String.format("%%%s%%", searchKey), offset, limit, ordering.toString(), context);
                                                   }
                                               },
                                               offset,
@@ -488,8 +529,8 @@ public class DefaultPaymentDao implements PaymentDao {
                                                   }
 
                                                   @Override
-                                                  public Iterator<PaymentMethodModelDao> build(final PaymentMethodSqlDao paymentMethodSqlDao, final Long limit, final InternalTenantContext context) {
-                                                      return paymentMethodSqlDao.getByPluginName(pluginName, offset, limit, context);
+                                                  public Iterator<PaymentMethodModelDao> build(final PaymentMethodSqlDao paymentMethodSqlDao, final Long offset, final Long limit, final Ordering ordering, final InternalTenantContext context) {
+                                                      return paymentMethodSqlDao.getByPluginName(pluginName, offset, limit, ordering.toString(), context);
                                                   }
                                               },
                                               offset,
@@ -649,5 +690,10 @@ public class DefaultPaymentDao implements PaymentDao {
 
     private InternalCallContext contextWithUpdatedDate(final InternalCallContext input) {
         return new InternalCallContext(input, clock.getUTCNow());
+    }
+
+    @Override
+    protected PaymentApiException generateAlreadyExistsException(final PaymentModelDao entity, final InternalCallContext context) {
+        return new PaymentApiException(ErrorCode.PAYMENT_INTERNAL_ERROR, "Payment already exists");
     }
 }

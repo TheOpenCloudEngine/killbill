@@ -1,6 +1,6 @@
 /*
- * Copyright 2014-2015 Groupon, Inc
- * Copyright 2014-2015 The Billing Project, LLC
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
  * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -29,15 +29,17 @@ import org.killbill.billing.callcontext.InternalCallContext;
 import org.killbill.billing.catalog.api.Currency;
 import org.killbill.billing.payment.api.PluginProperty;
 import org.killbill.billing.payment.api.TransactionType;
+import org.killbill.billing.payment.dao.PaymentModelDao;
 import org.killbill.billing.payment.dao.PaymentTransactionModelDao;
 import org.killbill.billing.payment.plugin.api.PaymentTransactionInfoPlugin;
 import org.killbill.billing.util.callcontext.CallContext;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
 public class PaymentStateContext {
 
-
+    private PaymentModelDao paymentModelDao;
     // The following fields (paymentId, transactionId, amount, currency) may take their value from the paymentTransactionModelDao *when they are not already set*
     private PaymentTransactionModelDao paymentTransactionModelDao;
     // Initialized in CTOR or only set through paymentTransactionModelDao
@@ -56,6 +58,8 @@ public class PaymentStateContext {
     // Set in the control layer in the leavingState callback
     private String paymentExternalKey;
     private String paymentTransactionExternalKey;
+    protected UUID paymentIdForNewPayment;
+    protected UUID paymentTransactionIdForNewPaymentTransaction;
 
     // Set in the control layer after creating the attempt in the enteringState callback
     private UUID attemptId;
@@ -72,20 +76,20 @@ public class PaymentStateContext {
     private final CallContext callContext;
     private final boolean isApiPayment;
 
-    // Use to create new transactions only
+    @VisibleForTesting
     public PaymentStateContext(final boolean isApiPayment, @Nullable final UUID paymentId, @Nullable final String paymentTransactionExternalKey, final TransactionType transactionType,
                                final Account account, @Nullable final UUID paymentMethodId, final BigDecimal amount, final Currency currency,
                                final boolean shouldLockAccountAndDispatch, final Iterable<PluginProperty> properties,
                                final InternalCallContext internalCallContext, final CallContext callContext) {
         this(isApiPayment, paymentId, null, null, null, paymentTransactionExternalKey, transactionType, account, paymentMethodId,
-             amount, currency, shouldLockAccountAndDispatch, null, properties, internalCallContext, callContext);
+             amount, currency, null, null, shouldLockAccountAndDispatch, null, properties, internalCallContext, callContext);
     }
 
     // Used to create new payment and transactions
     public PaymentStateContext(final boolean isApiPayment, @Nullable final UUID paymentId, final UUID transactionId, @Nullable final UUID attemptId, @Nullable final String paymentExternalKey,
                                @Nullable final String paymentTransactionExternalKey, final TransactionType transactionType,
                                final Account account, @Nullable final UUID paymentMethodId, final BigDecimal amount, final Currency currency,
-                               final boolean shouldLockAccountAndDispatch, final OperationResult overridePluginOperationResult, final Iterable<PluginProperty> properties,
+                               @Nullable final UUID paymentIdForNewPayment, @Nullable final UUID paymentTransactionIdForNewPaymentTransaction, final boolean shouldLockAccountAndDispatch, final OperationResult overridePluginOperationResult, final Iterable<PluginProperty> properties,
                                final InternalCallContext internalCallContext, final CallContext callContext) {
         this.isApiPayment = isApiPayment;
         this.paymentId = paymentId;
@@ -98,6 +102,8 @@ public class PaymentStateContext {
         this.paymentMethodId = paymentMethodId;
         this.amount = amount;
         this.currency = currency;
+        this.paymentIdForNewPayment = paymentIdForNewPayment;
+        this.paymentTransactionIdForNewPaymentTransaction = paymentTransactionIdForNewPaymentTransaction;
         this.shouldLockAccountAndDispatch = shouldLockAccountAndDispatch;
         this.overridePluginOperationResult = overridePluginOperationResult;
         this.properties = properties;
@@ -112,6 +118,14 @@ public class PaymentStateContext {
 
     public void setPaymentMethodId(final UUID paymentMethodId) {
         this.paymentMethodId = paymentMethodId;
+    }
+
+    public PaymentModelDao getPaymentModelDao() {
+        return paymentModelDao;
+    }
+
+    public void setPaymentModelDao(final PaymentModelDao paymentModelDao) {
+        this.paymentModelDao = paymentModelDao;
     }
 
     public PaymentTransactionModelDao getPaymentTransactionModelDao() {
@@ -234,4 +248,11 @@ public class PaymentStateContext {
         this.properties = properties;
     }
 
+    public UUID getPaymentIdForNewPayment() {
+        return paymentIdForNewPayment;
+    }
+
+    public UUID getPaymentTransactionIdForNewPaymentTransaction() {
+        return paymentTransactionIdForNewPaymentTransaction;
+    }
 }

@@ -1,7 +1,7 @@
 /*
  * Copyright 2010-2013 Ning, Inc.
- * Copyright 2014-2016 Groupon, Inc
- * Copyright 2014-2016 The Billing Project, LLC
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
  * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -34,16 +34,19 @@ import org.killbill.billing.callcontext.InternalCallContext;
 import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.catalog.api.Currency;
 import org.killbill.billing.dao.MockNonEntityDao;
+import org.killbill.billing.payment.api.Payment;
+import org.killbill.billing.payment.api.PaymentApiException;
 import org.killbill.billing.payment.api.TransactionStatus;
 import org.killbill.billing.payment.api.TransactionType;
 import org.killbill.billing.util.entity.DefaultPagination;
 import org.killbill.billing.util.entity.Pagination;
+import org.killbill.billing.util.entity.dao.MockEntityDaoBase;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 
-public class MockPaymentDao implements PaymentDao {
+public class MockPaymentDao extends MockEntityDaoBase<PaymentModelDao, Payment, PaymentApiException> implements PaymentDao {
 
     private final Map<UUID, PaymentModelDao> payments = new HashMap<UUID, PaymentModelDao>();
     private final Map<UUID, PaymentTransactionModelDao> transactions = new HashMap<UUID, PaymentTransactionModelDao>();
@@ -188,7 +191,8 @@ public class MockPaymentDao implements PaymentDao {
     }
 
     @Override
-    public PaymentModelDao insertPaymentWithFirstTransaction(final PaymentModelDao payment, final PaymentTransactionModelDao paymentTransaction, final InternalCallContext context) {
+    public PaymentAndTransactionModelDao insertPaymentWithFirstTransaction(final PaymentModelDao payment, final PaymentTransactionModelDao paymentTransaction, final InternalCallContext context) {
+        final PaymentAndTransactionModelDao paymentAndTransactionModelDao = new PaymentAndTransactionModelDao();
 
         payment.setTenantRecordId(context.getTenantRecordId());
         paymentTransaction.setTenantRecordId(context.getTenantRecordId());
@@ -204,7 +208,11 @@ public class MockPaymentDao implements PaymentDao {
             mockNonEntityDao.addTenantRecordIdMapping(paymentTransaction.getId(), context);
             mockNonEntityDao.addAccountRecordIdMapping((paymentTransaction.getId()), context);
         }
-        return payment;
+
+        paymentAndTransactionModelDao.setPaymentModelDao(payment);
+        paymentAndTransactionModelDao.setPaymentTransactionModelDao(paymentTransaction);
+
+        return paymentAndTransactionModelDao;
     }
 
     @Override
@@ -221,10 +229,12 @@ public class MockPaymentDao implements PaymentDao {
     }
 
     @Override
-    public void updatePaymentAndTransactionOnCompletion(final UUID accountId, final UUID attemptId, final UUID paymentId, final TransactionType transactionType,
-                                                        final String currentPaymentStateName, final String lastSuccessPaymentStateName, final UUID transactionId,
-                                                        final TransactionStatus paymentStatus, final BigDecimal processedAmount, final Currency processedCurrency,
-                                                        final String gatewayErrorCode, final String gatewayErrorMsg, final InternalCallContext context) {
+    public PaymentAndTransactionModelDao updatePaymentAndTransactionOnCompletion(final UUID accountId, final UUID attemptId, final UUID paymentId, final TransactionType transactionType,
+                                                                                 final String currentPaymentStateName, final String lastSuccessPaymentStateName, final UUID transactionId,
+                                                                                 final TransactionStatus paymentStatus, final BigDecimal processedAmount, final Currency processedCurrency,
+                                                                                 final String gatewayErrorCode, final String gatewayErrorMsg, final InternalCallContext context) {
+        final PaymentAndTransactionModelDao paymentAndTransactionModelDao = new PaymentAndTransactionModelDao();
+
         synchronized (this) {
             final PaymentModelDao payment = payments.get(paymentId);
             if (payment != null) {
@@ -239,6 +249,11 @@ public class MockPaymentDao implements PaymentDao {
                 transaction.setGatewayErrorCode(gatewayErrorCode);
                 transaction.setGatewayErrorMsg(gatewayErrorMsg);
             }
+
+            paymentAndTransactionModelDao.setPaymentModelDao(payment);
+            paymentAndTransactionModelDao.setPaymentTransactionModelDao(transaction);
+
+            return paymentAndTransactionModelDao;
         }
     }
 

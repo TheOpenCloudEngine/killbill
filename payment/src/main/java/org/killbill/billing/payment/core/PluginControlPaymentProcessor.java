@@ -1,6 +1,6 @@
 /*
- * Copyright 2014-2016 Groupon, Inc
- * Copyright 2014-2016 The Billing Project, LLC
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
  * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -34,7 +34,6 @@ import org.killbill.billing.account.api.AccountInternalApi;
 import org.killbill.billing.callcontext.InternalCallContext;
 import org.killbill.billing.catalog.api.Currency;
 import org.killbill.billing.invoice.api.InvoiceInternalApi;
-import org.killbill.billing.osgi.api.OSGIServiceRegistration;
 import org.killbill.billing.payment.api.Payment;
 import org.killbill.billing.payment.api.PaymentApiException;
 import org.killbill.billing.payment.api.PaymentTransaction;
@@ -46,10 +45,10 @@ import org.killbill.billing.payment.core.sm.PluginControlPaymentAutomatonRunner.
 import org.killbill.billing.payment.dao.PaymentAttemptModelDao;
 import org.killbill.billing.payment.dao.PaymentDao;
 import org.killbill.billing.payment.dao.PaymentModelDao;
+import org.killbill.billing.payment.dao.PaymentTransactionModelDao;
 import org.killbill.billing.payment.dao.PluginPropertySerializer;
 import org.killbill.billing.payment.dao.PluginPropertySerializer.PluginPropertySerializerException;
 import org.killbill.billing.payment.invoice.InvoicePaymentControlPluginApi;
-import org.killbill.billing.payment.plugin.api.PaymentPluginApi;
 import org.killbill.billing.tag.TagInternalApi;
 import org.killbill.billing.util.callcontext.CallContext;
 import org.killbill.billing.util.callcontext.InternalCallContextFactory;
@@ -77,7 +76,7 @@ public class PluginControlPaymentProcessor extends ProcessorBase {
     private final PaymentControlStateMachineHelper paymentControlStateMachineHelper;
 
     @Inject
-    public PluginControlPaymentProcessor(final OSGIServiceRegistration<PaymentPluginApi> pluginRegistry,
+    public PluginControlPaymentProcessor(final PaymentPluginServiceRegistration paymentPluginServiceRegistration,
                                          final AccountInternalApi accountInternalApi,
                                          final InvoiceInternalApi invoiceApi,
                                          final TagInternalApi tagUserApi,
@@ -87,7 +86,7 @@ public class PluginControlPaymentProcessor extends ProcessorBase {
                                          final PluginControlPaymentAutomatonRunner pluginControlledPaymentAutomatonRunner,
                                          final PaymentControlStateMachineHelper paymentControlStateMachineHelper,
                                          final Clock clock) {
-        super(pluginRegistry, accountInternalApi, paymentDao, tagUserApi, locker, internalCallContextFactory, invoiceApi, clock);
+        super(paymentPluginServiceRegistration, accountInternalApi, paymentDao, tagUserApi, locker, internalCallContextFactory, invoiceApi, clock);
         this.paymentControlStateMachineHelper = paymentControlStateMachineHelper;
         this.pluginControlledPaymentAutomatonRunner = pluginControlledPaymentAutomatonRunner;
     }
@@ -196,6 +195,42 @@ public class PluginControlPaymentProcessor extends ProcessorBase {
                                                           properties,
                                                           paymentControlPluginNames,
                                                           callContext, internalCallContext);
+    }
+
+    public Payment notifyPendingPaymentOfStateChanged(final boolean isApiPayment, final Account account, final UUID paymentTransactionId, final boolean isSuccess, final List<String> paymentControlPluginNames, final CallContext callContext, final InternalCallContext internalCallContext) throws PaymentApiException {
+        final PaymentTransactionModelDao paymentTransactionModelDao = paymentDao.getPaymentTransaction(paymentTransactionId, internalCallContext);
+        final List<PaymentAttemptModelDao> attempts = paymentDao.getPaymentAttemptByTransactionExternalKey(paymentTransactionModelDao.getTransactionExternalKey(), internalCallContext);
+        final PaymentAttemptModelDao attempt = Iterables.find(attempts,
+                                                              new Predicate<PaymentAttemptModelDao>() {
+                                                                  @Override
+                                                                  public boolean apply(final PaymentAttemptModelDao input) {
+                                                                      return input.getTransactionId().equals(paymentTransactionId);
+                                                                  }
+                                                              });
+
+        final Iterable<PluginProperty> pluginProperties;
+        try {
+            pluginProperties = PluginPropertySerializer.deserialize(attempt.getPluginProperties());
+        } catch (final PluginPropertySerializerException e) {
+            throw new PaymentApiException(e, ErrorCode.PAYMENT_INTERNAL_ERROR, String.format("Unable to deserialize payment attemptId='%s' properties", attempt.getId()));
+        }
+
+        return pluginControlledPaymentAutomatonRunner.run(isApiPayment,
+                                                          isSuccess,
+                                                          paymentTransactionModelDao.getTransactionType(),
+                                                          ControlOperation.NOTIFICATION_OF_STATE_CHANGE,
+                                                          account,
+                                                          attempt.getPaymentMethodId(),
+                                                          paymentTransactionModelDao.getPaymentId(),
+                                                          attempt.getPaymentExternalKey(),
+                                                          paymentTransactionId,
+                                                          paymentTransactionModelDao.getTransactionExternalKey(),
+                                                          paymentTransactionModelDao.getAmount(),
+                                                          paymentTransactionModelDao.getCurrency(),
+                                                          pluginProperties,
+                                                          paymentControlPluginNames,
+                                                          callContext,
+                                                          internalCallContext);
     }
 
     public Payment createChargeback(final boolean isApiPayment, final Account account, final UUID paymentId, final String transactionExternalKey, final BigDecimal amount, final Currency currency,

@@ -493,14 +493,11 @@ public class DefaultEntitlement extends EntityBase implements Entitlement {
                     throw new EntitlementApiException(ErrorCode.SUB_CANCEL_BAD_STATE, getId(), EntitlementState.CANCELLED);
                 }
 
-                // Make sure to compute the entitlement effective date first to avoid timing issues for IMM cancellations
-                // (we don't want an entitlement cancel date one second or so after the subscription cancel date or add-ons cancellations
-                // computations won't work).
                 final InternalCallContext contextWithValidAccountRecordId = internalCallContextFactory.createInternalCallContext(getAccountId(), callContext);
 
                 try {
                     // Cancel subscription base first, to correctly compute the add-ons entitlements we need to cancel (see below)
-                    getSubscriptionBase().cancelWithPolicy(billingPolicy, callContext);
+                    getSubscriptionBase().cancelWithPolicy(billingPolicy, eventsStream.getAccountTimeZone(), eventsStream.getDefaultBillCycleDayLocal(), callContext);
                 } catch (final SubscriptionBaseApiException e) {
                     throw new EntitlementApiException(e);
                 }
@@ -523,6 +520,7 @@ public class DefaultEntitlement extends EntityBase implements Entitlement {
     }
 
     private LocalDate getLocalDateFromEntitlementPolicy(final EntitlementActionPolicy entitlementPolicy) {
+
         final LocalDate cancellationDate;
         switch (entitlementPolicy) {
             case IMMEDIATE:
@@ -540,6 +538,7 @@ public class DefaultEntitlement extends EntityBase implements Entitlement {
         }
         return (cancellationDate.compareTo(getEffectiveStartDate()) < 0) ? getEffectiveStartDate() : cancellationDate;
     }
+
 
     @Override
     public Entitlement changePlan(final PlanSpecifier spec, final List<PlanPhasePriceOverride> overrides, final Iterable<PluginProperty> properties, final CallContext callContext) throws EntitlementApiException {

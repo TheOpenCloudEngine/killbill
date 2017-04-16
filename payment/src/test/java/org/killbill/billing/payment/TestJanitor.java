@@ -1,6 +1,6 @@
 /*
- * Copyright 2014-2016 Groupon, Inc
- * Copyright 2014-2016 The Billing Project, LLC
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
  * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -63,7 +63,6 @@ import org.skife.config.TimeSpan;
 import org.skife.jdbi.v2.Handle;
 import org.skife.jdbi.v2.tweak.HandleCallback;
 import org.testng.Assert;
-import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
@@ -71,6 +70,7 @@ import org.testng.annotations.Test;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
 import com.google.inject.Inject;
 
 import static com.jayway.awaitility.Awaitility.await;
@@ -101,8 +101,6 @@ public class TestJanitor extends PaymentTestSuiteWithEmbeddedDB {
     @Inject
     protected NotificationQueueService notificationQueueService;
     @Inject
-    private Janitor janitor;
-    @Inject
     private PaymentBusEventHandler handler;
     private MockPaymentProviderPlugin mockPaymentProviderPlugin;
 
@@ -123,15 +121,13 @@ public class TestJanitor extends PaymentTestSuiteWithEmbeddedDB {
         mockPaymentProviderPlugin = (MockPaymentProviderPlugin) registry.getServiceForName(MockPaymentProviderPlugin.PLUGIN_NAME);
     }
 
-    @AfterClass(groups = "slow")
-    protected void afterClass() throws Exception {
-    }
-
     @BeforeMethod(groups = "slow")
     public void beforeMethod() throws Exception {
         super.beforeMethod();
-        janitor.initialize();
-        janitor.start();
+
+        retryService.initialize();
+        retryService.start();
+
         eventBus.register(handler);
         testListener.reset();
         eventBus.register(testListener);
@@ -143,9 +139,10 @@ public class TestJanitor extends PaymentTestSuiteWithEmbeddedDB {
 
     @AfterMethod(groups = "slow")
     public void afterMethod() throws Exception {
+        retryService.stop();
+
         testListener.assertListenerStatus();
 
-        janitor.stop();
         eventBus.unregister(handler);
         eventBus.unregister(testListener);
         super.afterMethod();
@@ -405,9 +402,9 @@ public class TestJanitor extends PaymentTestSuiteWithEmbeddedDB {
                                                            "loup", "chat", internalCallContext);
         testListener.assertListenerStatus();
 
-        // Move clock for notification to be processed
+        // Move clock for notification to be processed ((default config is set for one hour)
         testListener.pushExpectedEvent(NextEvent.PAYMENT);
-        clock.addDeltaFromReality(5 * 60 * 1000);
+        clock.addDeltaFromReality(1000 * (3600 + 1));
 
         assertNotificationsCompleted(internalCallContext, 5);
         testListener.assertListenerStatus();
@@ -444,8 +441,8 @@ public class TestJanitor extends PaymentTestSuiteWithEmbeddedDB {
                                                            "loup", "chat", internalCallContext);
         testListener.assertListenerStatus();
 
-        // 15s,1m,3m,1h,1d,1d,1d,1d,1d
-        for (final TimeSpan cur : paymentConfig.getIncompleteTransactionsRetries(internalCallContext)) {
+        // 1h, 1d
+        for (final TimeSpan cur : paymentConfig.getPendingTransactionsRetries(internalCallContext)) {
             // Verify there is a notification to retry updating the value
             assertEquals(getPendingNotificationCnt(internalCallContext), 1);
 
@@ -498,7 +495,7 @@ public class TestJanitor extends PaymentTestSuiteWithEmbeddedDB {
                                                                                                           (BigDecimal) row.get("amount"),
                                                                                                           Currency.valueOf((String) row.get("currency")),
                                                                                                           (String) row.get("gateway_error_code"),
-                                                                                                          (String) row.get("gateway_error_msg"));
+                                                                                                          String.valueOf(row.get("gateway_error_msg")));
                     result.add(transactionModelDao);
                 }
                 return result;
@@ -511,12 +508,14 @@ public class TestJanitor extends PaymentTestSuiteWithEmbeddedDB {
             await().atMost(timeoutSec, SECONDS).until(new Callable<Boolean>() {
                 @Override
                 public Boolean call() throws Exception {
+                    boolean completed = true;
                     for (final NotificationEventWithMetadata<NotificationEvent> notificationEvent : notificationQueueService.getNotificationQueue(DefaultPaymentService.SERVICE_NAME, Janitor.QUEUE_NAME).getFutureOrInProcessingNotificationForSearchKeys(internalCallContext.getAccountRecordId(), internalCallContext.getTenantRecordId())) {
                         if (!notificationEvent.getEffectiveDate().isAfter(clock.getUTCNow())) {
-                            return false;
+                            completed = false;
                         }
+                        // Go through all results to close the connection
                     }
-                    return true;
+                    return completed;
                 }
             });
         } catch (final Exception e) {
@@ -526,7 +525,7 @@ public class TestJanitor extends PaymentTestSuiteWithEmbeddedDB {
 
     private int getPendingNotificationCnt(final InternalCallContext internalCallContext) {
         try {
-            return notificationQueueService.getNotificationQueue(DefaultPaymentService.SERVICE_NAME, Janitor.QUEUE_NAME).getFutureOrInProcessingNotificationForSearchKeys(internalCallContext.getAccountRecordId(), internalCallContext.getTenantRecordId()).size();
+            return Iterables.<NotificationEventWithMetadata>size(notificationQueueService.getNotificationQueue(DefaultPaymentService.SERVICE_NAME, Janitor.QUEUE_NAME).getFutureOrInProcessingNotificationForSearchKeys(internalCallContext.getAccountRecordId(), internalCallContext.getTenantRecordId()));
         } catch (final Exception e) {
             fail("Test failed ", e);
         }

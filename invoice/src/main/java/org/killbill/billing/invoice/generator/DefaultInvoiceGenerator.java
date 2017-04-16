@@ -76,8 +76,8 @@ public class DefaultInvoiceGenerator implements InvoiceGenerator {
         validateTargetDate(targetDate, context);
         final LocalDate adjustedTargetDate = adjustTargetDate(existingInvoices, targetDate);
 
-        final LocalDate invoiceDate = context.toLocalDate(clock.getUTCNow());
-        final Invoice invoice = new DefaultInvoice(account.getId(), invoiceDate, adjustedTargetDate, targetCurrency);
+        final LocalDate invoiceDate = context.toLocalDate(context.getCreatedDate());
+        final DefaultInvoice invoice = new DefaultInvoice(account.getId(), invoiceDate, adjustedTargetDate, targetCurrency);
         final UUID invoiceId = invoice.getId();
         final Map<UUID, SubscriptionFutureNotificationDates> perSubscriptionFutureNotificationDates = new HashMap<UUID, SubscriptionFutureNotificationDates>();
 

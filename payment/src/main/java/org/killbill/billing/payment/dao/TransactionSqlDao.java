@@ -35,20 +35,21 @@ import org.skife.jdbi.v2.sqlobject.Bind;
 import org.skife.jdbi.v2.sqlobject.BindBean;
 import org.skife.jdbi.v2.sqlobject.SqlQuery;
 import org.skife.jdbi.v2.sqlobject.SqlUpdate;
+import org.skife.jdbi.v2.sqlobject.customizers.Define;
 
 @EntitySqlDaoStringTemplate
 public interface TransactionSqlDao extends EntitySqlDao<PaymentTransactionModelDao, PaymentTransaction> {
 
     @SqlUpdate
     @Audited(ChangeType.UPDATE)
-    void updateTransactionStatus(@Bind("id") final String transactionId,
-                                 @Bind("attemptId") final String attemptId,
-                                 @Bind("processedAmount") final BigDecimal processedAmount,
-                                 @Bind("processedCurrency") final String processedCurrency,
-                                 @Bind("transactionStatus") final String transactionStatus,
-                                 @Bind("gatewayErrorCode") final String gatewayErrorCode,
-                                 @Bind("gatewayErrorMsg") final String gatewayErrorMsg,
-                                 @BindBean final InternalCallContext context);
+    Object updateTransactionStatus(@Bind("id") final String transactionId,
+                                   @Bind("attemptId") final String attemptId,
+                                   @Bind("processedAmount") final BigDecimal processedAmount,
+                                   @Bind("processedCurrency") final String processedCurrency,
+                                   @Bind("transactionStatus") final String transactionStatus,
+                                   @Bind("gatewayErrorCode") final String gatewayErrorCode,
+                                   @Bind("gatewayErrorMsg") final String gatewayErrorMsg,
+                                   @BindBean final InternalCallContext context);
 
     @SqlQuery
     List<PaymentTransactionModelDao> getPaymentTransactionsByExternalKey(@Bind("transactionExternalKey") final String transactionExternalKey,
@@ -61,10 +62,11 @@ public interface TransactionSqlDao extends EntitySqlDao<PaymentTransactionModelD
 
     @SqlQuery
     Iterator<PaymentTransactionModelDao> getByTransactionStatusPriorDateAcrossTenants(@TransactionStatusCollectionBinder final Collection<String> statuses,
-                                                                                  @Bind("createdBeforeDate") final Date createdBeforeDate,
-                                                                                  @Bind("createdAfterDate") final Date createdAfterDate,
-                                                                                  @Bind("offset") final Long offset,
-                                                                                  @Bind("rowCount") final Long rowCount);
+                                                                                      @Bind("createdBeforeDate") final Date createdBeforeDate,
+                                                                                      @Bind("createdAfterDate") final Date createdAfterDate,
+                                                                                      @Bind("offset") final Long offset,
+                                                                                      @Bind("rowCount") final Long rowCount,
+                                                                                      @Define("ordering") final String ordering);
 
     @SqlQuery
     public List<PaymentTransactionModelDao> getByPaymentId(@Bind("paymentId") final UUID paymentId,

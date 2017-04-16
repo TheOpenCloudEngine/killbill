@@ -84,20 +84,22 @@ public class SubscriptionJson extends JsonBase {
         private final String eventId;
         private final String billingPeriod;
         private final LocalDate effectiveDate;
+        private final String plan;
         private final String product;
         private final String priceList;
+        private final String phase;
         @ApiModelProperty(dataType = "org.killbill.billing.entitlement.api.SubscriptionEventType")
         private final String eventType;
         private final Boolean isBlockedBilling;
         private final Boolean isBlockedEntitlement;
         private final String serviceName;
         private final String serviceStateName;
-        private final String phase;
 
         @JsonCreator
         public EventSubscriptionJson(@JsonProperty("eventId") final String eventId,
                                      @JsonProperty("billingPeriod") final String billingPeriod,
                                      @JsonProperty("effectiveDt") final LocalDate effectiveDate,
+                                     @JsonProperty("plan") final String plan,
                                      @JsonProperty("product") final String product,
                                      @JsonProperty("priceList") final String priceList,
                                      @JsonProperty("eventType") final String eventType,
@@ -111,6 +113,7 @@ public class SubscriptionJson extends JsonBase {
             this.eventId = eventId;
             this.billingPeriod = billingPeriod;
             this.effectiveDate = effectiveDate;
+            this.plan = plan;
             this.product = product;
             this.priceList = priceList;
             this.eventType = eventType;
@@ -125,12 +128,14 @@ public class SubscriptionJson extends JsonBase {
 
             super(toAuditLogJson(getAuditLogsForSubscriptionEvent(subscriptionEvent, accountAuditLogs)));
             final BillingPeriod billingPeriod = subscriptionEvent.getNextBillingPeriod() != null ? subscriptionEvent.getNextBillingPeriod() : subscriptionEvent.getPrevBillingPeriod();
+            final Plan plan = subscriptionEvent.getNextPlan() != null ? subscriptionEvent.getNextPlan() : subscriptionEvent.getPrevPlan();
             final Product product = subscriptionEvent.getNextProduct() != null ? subscriptionEvent.getNextProduct() : subscriptionEvent.getPrevProduct();
             final PriceList priceList = subscriptionEvent.getNextPriceList() != null ? subscriptionEvent.getNextPriceList() : subscriptionEvent.getPrevPriceList();
             final PlanPhase phase = subscriptionEvent.getNextPhase() != null ? subscriptionEvent.getNextPhase() : subscriptionEvent.getPrevPhase();
             this.eventId = subscriptionEvent.getId().toString();
             this.billingPeriod = billingPeriod != null ? billingPeriod.toString() : null;
             this.effectiveDate = subscriptionEvent.getEffectiveDate();
+            this.plan = plan != null ? plan.getName() : null;
             this.product = product != null ? product.getName() : null;
             this.priceList = priceList != null ? priceList.getName() : null;
             this.eventType = subscriptionEvent.getSubscriptionEventType().toString();
@@ -165,6 +170,10 @@ public class SubscriptionJson extends JsonBase {
 
         public LocalDate getEffectiveDate() {
             return effectiveDate;
+        }
+
+        public String getPlan() {
+            return plan;
         }
 
         public String getProduct() {
@@ -205,6 +214,7 @@ public class SubscriptionJson extends JsonBase {
             sb.append("eventId='").append(eventId).append('\'');
             sb.append(", billingPeriod='").append(billingPeriod).append('\'');
             sb.append(", effectiveDate=").append(effectiveDate);
+            sb.append(", plan='").append(plan).append('\'');
             sb.append(", product='").append(product).append('\'');
             sb.append(", priceList='").append(priceList).append('\'');
             sb.append(", eventType='").append(eventType).append('\'');
@@ -252,6 +262,9 @@ public class SubscriptionJson extends JsonBase {
             if (priceList != null ? !priceList.equals(that.priceList) : that.priceList != null) {
                 return false;
             }
+            if (plan != null ? !plan.equals(that.plan) : that.plan != null) {
+                return false;
+            }
             if (product != null ? !product.equals(that.product) : that.product != null) {
                 return false;
             }
@@ -270,6 +283,7 @@ public class SubscriptionJson extends JsonBase {
             int result = eventId != null ? eventId.hashCode() : 0;
             result = 31 * result + (billingPeriod != null ? billingPeriod.hashCode() : 0);
             result = 31 * result + (effectiveDate != null ? effectiveDate.hashCode() : 0);
+            result = 31 * result + (plan != null ? plan.hashCode() : 0);
             result = 31 * result + (product != null ? product.hashCode() : 0);
             result = 31 * result + (priceList != null ? priceList.hashCode() : 0);
             result = 31 * result + (eventType != null ? eventType.hashCode() : 0);
@@ -332,34 +346,35 @@ public class SubscriptionJson extends JsonBase {
         this.startDate = subscription.getEffectiveStartDate();
 
         // last* fields can be null if the subscription starts in the future - rely on the first available event instead
-        final SubscriptionEvent firstEvent = subscription.getSubscriptionEvents().isEmpty() ? null : subscription.getSubscriptionEvents().get(0);
+        final List<SubscriptionEvent> subscriptionEvents = subscription.getSubscriptionEvents();
+        final SubscriptionEvent firstEvent = subscriptionEvents.isEmpty() ? null : subscriptionEvents.get(0);
         if (subscription.getLastActiveProduct() == null) {
-            this.productName = firstEvent == null ? null : firstEvent.getNextProduct().getName();
+            this.productName = (firstEvent == null || firstEvent.getNextProduct() == null) ? null : firstEvent.getNextProduct().getName();
         } else {
             this.productName = subscription.getLastActiveProduct().getName();
         }
         if (subscription.getLastActiveProductCategory() == null) {
-            this.productCategory = firstEvent == null ? null : firstEvent.getNextProduct().getCategory().name();
+            this.productCategory = (firstEvent == null || firstEvent.getNextProduct() == null) ? null : firstEvent.getNextProduct().getCategory().name();
         } else {
             this.productCategory = subscription.getLastActiveProductCategory().name();
         }
         if (subscription.getLastActivePlan() == null) {
-            this.billingPeriod = firstEvent == null ? null : firstEvent.getNextPlan().getRecurringBillingPeriod().name();
+            this.billingPeriod = (firstEvent == null || firstEvent.getNextPlan() == null) ? null : firstEvent.getNextPlan().getRecurringBillingPeriod().name();
         } else {
             this.billingPeriod = subscription.getLastActivePlan().getRecurringBillingPeriod().toString();
         }
         if (subscription.getLastActivePhase() == null) {
-            this.phaseType = firstEvent == null ? null : firstEvent.getNextPhase().getPhaseType().name();
+            this.phaseType = (firstEvent == null || firstEvent.getNextPhase() == null) ? null : firstEvent.getNextPhase().getPhaseType().name();
         } else {
             this.phaseType = subscription.getLastActivePhase().getPhaseType().toString();
         }
         if (subscription.getLastActivePriceList() == null) {
-            this.priceList = firstEvent == null ? null : firstEvent.getNextPriceList().getName();
+            this.priceList = (firstEvent == null || firstEvent.getNextPriceList() == null) ? null : firstEvent.getNextPriceList().getName();
         } else {
             this.priceList = subscription.getLastActivePriceList().getName();
         }
         if (subscription.getLastActivePlan() == null) {
-            this.planName = firstEvent == null ? null : firstEvent.getNextPlan().getName();
+            this.planName = (firstEvent == null || firstEvent.getNextPlan() == null) ? null : firstEvent.getNextPlan().getName();
         } else {
             this.planName = subscription.getLastActivePlan().getName();
         }
@@ -377,21 +392,31 @@ public class SubscriptionJson extends JsonBase {
         this.subscriptionId = subscription.getId().toString();
         this.externalKey = subscription.getExternalKey();
         this.events = new LinkedList<EventSubscriptionJson>();
-        for (final SubscriptionEvent subscriptionEvent : subscription.getSubscriptionEvents()) {
-            this.events.add(new EventSubscriptionJson(subscriptionEvent, accountAuditLogs));
-        }
-
         // We fill the catalog info every time we get the currency from the account (even if this is not overridden Plan)
         this.priceOverrides = new ArrayList<PhasePriceOverrideJson>();
-        if (currency != null) {
-            final Plan plan = subscription.getLastActivePlan();
-            if (plan != null) {
-                for (final PlanPhase cur : plan.getAllPhases()) {
-                    final BigDecimal fixedPrice = cur.getFixed() != null ? cur.getFixed().getPrice().getPrice(currency) : null;
-                    final BigDecimal recurringPrice = cur.getRecurring() != null ? cur.getRecurring().getRecurringPrice().getPrice(currency) : null;
-                    final PhasePriceOverrideJson phase = new PhasePriceOverrideJson(cur.getName(), cur.getPhaseType().toString(), fixedPrice, recurringPrice);
-                    priceOverrides.add(phase);
+
+        String currentPhaseName = null;
+        String currentPlanName = null;
+        for (final SubscriptionEvent subscriptionEvent : subscriptionEvents) {
+            this.events.add(new EventSubscriptionJson(subscriptionEvent, accountAuditLogs));
+
+            if (currency != null) {
+
+                final Plan curPlan = subscriptionEvent.getNextPlan();
+                if (curPlan != null && (currentPlanName == null || !curPlan.getName().equals(currentPlanName))) {
+                    currentPlanName = curPlan.getName();
                 }
+
+                final PlanPhase curPlanPhase = subscriptionEvent.getNextPhase();
+                if (curPlanPhase == null || curPlanPhase.getName().equals(currentPhaseName)) {
+                    continue;
+                }
+                currentPhaseName = curPlanPhase.getName();
+
+                final BigDecimal fixedPrice = curPlanPhase.getFixed() != null ? curPlanPhase.getFixed().getPrice().getPrice(currency) : null;
+                final BigDecimal recurringPrice = curPlanPhase.getRecurring() != null ? curPlanPhase.getRecurring().getRecurringPrice().getPrice(currency) : null;
+                final PhasePriceOverrideJson phase = new PhasePriceOverrideJson(currentPlanName, curPlanPhase.getName(), curPlanPhase.getPhaseType().toString(), fixedPrice, recurringPrice);
+                priceOverrides.add(phase);
             }
         }
     }

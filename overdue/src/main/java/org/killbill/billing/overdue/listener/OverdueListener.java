@@ -1,7 +1,7 @@
 /*
  * Copyright 2010-2013 Ning, Inc.
- * Copyright 2014-2016 Groupon, Inc
- * Copyright 2014-2016 The Billing Project, LLC
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
  * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -31,6 +31,7 @@ import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.events.ControlTagCreationInternalEvent;
 import org.killbill.billing.events.ControlTagDeletionInternalEvent;
 import org.killbill.billing.events.InvoiceAdjustmentInternalEvent;
+import org.killbill.billing.events.InvoiceCreationInternalEvent;
 import org.killbill.billing.events.InvoicePaymentErrorInternalEvent;
 import org.killbill.billing.events.InvoicePaymentInfoInternalEvent;
 import org.killbill.billing.overdue.api.OverdueApiException;
@@ -44,6 +45,7 @@ import org.killbill.billing.overdue.notification.OverdueAsyncBusNotificationKey.
 import org.killbill.billing.overdue.notification.OverdueAsyncBusNotifier;
 import org.killbill.billing.overdue.notification.OverduePoster;
 import org.killbill.billing.util.cache.Cachable.CacheType;
+import org.killbill.billing.util.cache.CacheController;
 import org.killbill.billing.util.cache.CacheControllerDispatcher;
 import org.killbill.billing.util.callcontext.CallOrigin;
 import org.killbill.billing.util.callcontext.InternalCallContextFactory;
@@ -64,7 +66,7 @@ public class OverdueListener {
     private static final Logger log = LoggerFactory.getLogger(OverdueListener.class);
 
     private final InternalCallContextFactory internalCallContextFactory;
-    private final CacheControllerDispatcher cacheControllerDispatcher;
+    private final CacheController<String, UUID> objectIdCacheController;
     private final Clock clock;
     private final OverduePoster asyncPoster;
     private final OverdueConfigCache overdueConfigCache;
@@ -83,7 +85,7 @@ public class OverdueListener {
         this.clock = clock;
         this.asyncPoster = asyncPoster;
         this.overdueConfigCache = overdueConfigCache;
-        this.cacheControllerDispatcher = cacheControllerDispatcher;
+        this.objectIdCacheController = cacheControllerDispatcher.getCacheController(CacheType.OBJECT_ID);
         this.internalCallContextFactory = internalCallContextFactory;
         this.accountApi = accountApi;
     }
@@ -95,7 +97,7 @@ public class OverdueListener {
             final InternalCallContext internalCallContext = createCallContext(event.getUserToken(), event.getSearchKey1(), event.getSearchKey2());
             insertBusEventIntoNotificationQueue(event.getObjectId(), OverdueAsyncBusNotificationAction.CLEAR, internalCallContext);
         } else if (event.getTagDefinition().getName().equals(ControlTagType.WRITTEN_OFF.toString()) && event.getObjectType() == ObjectType.INVOICE) {
-            final UUID accountId = nonEntityDao.retrieveIdFromObject(event.getSearchKey1(), ObjectType.ACCOUNT, cacheControllerDispatcher.getCacheController(CacheType.OBJECT_ID));
+            final UUID accountId = nonEntityDao.retrieveIdFromObject(event.getSearchKey1(), ObjectType.ACCOUNT, objectIdCacheController);
             insertBusEventIntoNotificationQueue(accountId, event);
         }
     }
@@ -106,7 +108,7 @@ public class OverdueListener {
         if (event.getTagDefinition().getName().equals(ControlTagType.OVERDUE_ENFORCEMENT_OFF.toString()) && event.getObjectType() == ObjectType.ACCOUNT) {
             insertBusEventIntoNotificationQueue(event.getObjectId(), event);
         } else if (event.getTagDefinition().getName().equals(ControlTagType.WRITTEN_OFF.toString()) && event.getObjectType() == ObjectType.INVOICE) {
-            final UUID accountId = nonEntityDao.retrieveIdFromObject(event.getSearchKey1(), ObjectType.ACCOUNT, cacheControllerDispatcher.getCacheController(CacheType.OBJECT_ID));
+            final UUID accountId = nonEntityDao.retrieveIdFromObject(event.getSearchKey1(), ObjectType.ACCOUNT, objectIdCacheController);
             insertBusEventIntoNotificationQueue(accountId, event);
         }
     }
@@ -129,6 +131,13 @@ public class OverdueListener {
     @Subscribe
     public void handleInvoiceAdjustmentEvent(final InvoiceAdjustmentInternalEvent event) {
         log.debug("Received InvoiceAdjustment event {}", event);
+        insertBusEventIntoNotificationQueue(event.getAccountId(), event);
+    }
+
+    @AllowConcurrentEvents
+    @Subscribe
+    public void handleInvoiceCreation(final InvoiceCreationInternalEvent event) {
+        log.debug("Received InvoiceCreation event {}", event);
         insertBusEventIntoNotificationQueue(event.getAccountId(), event);
     }
 

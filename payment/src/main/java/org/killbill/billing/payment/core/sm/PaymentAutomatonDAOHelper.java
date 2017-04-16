@@ -1,6 +1,6 @@
 /*
- * Copyright 2014 Groupon, Inc
- * Copyright 2014 The Billing Project, LLC
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
  * Groupon licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -27,10 +27,11 @@ import org.joda.time.DateTime;
 import org.killbill.billing.ErrorCode;
 import org.killbill.billing.callcontext.InternalCallContext;
 import org.killbill.billing.catalog.api.Currency;
-import org.killbill.billing.osgi.api.OSGIServiceRegistration;
 import org.killbill.billing.payment.api.PaymentApiException;
 import org.killbill.billing.payment.api.TransactionStatus;
 import org.killbill.billing.payment.api.TransactionType;
+import org.killbill.billing.payment.core.PaymentPluginServiceRegistration;
+import org.killbill.billing.payment.dao.PaymentAndTransactionModelDao;
 import org.killbill.billing.payment.dao.PaymentDao;
 import org.killbill.billing.payment.dao.PaymentMethodModelDao;
 import org.killbill.billing.payment.dao.PaymentModelDao;
@@ -54,7 +55,7 @@ public class PaymentAutomatonDAOHelper {
 
     protected final PaymentDao paymentDao;
 
-    private final OSGIServiceRegistration<PaymentPluginApi> pluginRegistry;
+    private final PaymentPluginServiceRegistration paymentPluginServiceRegistration;
     private final PersistentBus eventBus;
 
     // Cached
@@ -64,14 +65,14 @@ public class PaymentAutomatonDAOHelper {
     // Used to build new payments and transactions
     public PaymentAutomatonDAOHelper(final PaymentStateContext paymentStateContext,
                                      final DateTime utcNow, final PaymentDao paymentDao,
-                                     final OSGIServiceRegistration<PaymentPluginApi> pluginRegistry,
+                                     final PaymentPluginServiceRegistration paymentPluginServiceRegistration,
                                      final InternalCallContext internalCallContext,
                                      final PersistentBus eventBus,
                                      final PaymentStateMachineHelper paymentSMHelper) throws PaymentApiException {
         this.paymentStateContext = paymentStateContext;
         this.utcNow = utcNow;
         this.paymentDao = paymentDao;
-        this.pluginRegistry = pluginRegistry;
+        this.paymentPluginServiceRegistration = paymentPluginServiceRegistration;
         this.internalCallContext = internalCallContext;
         this.eventBus = eventBus;
         this.paymentSMHelper = paymentSMHelper;
@@ -86,8 +87,8 @@ public class PaymentAutomatonDAOHelper {
             final PaymentTransactionModelDao newPaymentTransactionModelDao = buildNewPaymentTransactionModelDao(newPaymentModelDao.getId());
 
             existingTransactions = ImmutableList.of();
-            final PaymentModelDao paymentModelDao = paymentDao.insertPaymentWithFirstTransaction(newPaymentModelDao, newPaymentTransactionModelDao, internalCallContext);
-            paymentTransactionModelDao = paymentDao.getTransactionsForPayment(paymentModelDao.getId(), internalCallContext).get(0);
+            final PaymentAndTransactionModelDao paymentAndTransactionModelDao = paymentDao.insertPaymentWithFirstTransaction(newPaymentModelDao, newPaymentTransactionModelDao, internalCallContext);
+            paymentTransactionModelDao = paymentAndTransactionModelDao.getPaymentTransactionModelDao();
 
         } else {
             existingTransactions = paymentDao.getTransactionsForPayment(paymentStateContext.getPaymentId(), internalCallContext);
@@ -131,36 +132,32 @@ public class PaymentAutomatonDAOHelper {
         final String gatewayErrorMsg = paymentInfoPlugin == null ? null : paymentInfoPlugin.getGatewayError();
 
         final String lastSuccessPaymentState = paymentSMHelper.isSuccessState(currentPaymentStateName) ? currentPaymentStateName : null;
-        paymentDao.updatePaymentAndTransactionOnCompletion(paymentStateContext.getAccount().getId(),
-                                                           paymentStateContext.getAttemptId(),
-                                                           paymentStateContext.getPaymentId(),
-                                                           paymentStateContext.getTransactionType(),
-                                                           currentPaymentStateName,
-                                                           lastSuccessPaymentState,
-                                                           paymentStateContext.getPaymentTransactionModelDao().getId(),
-                                                           transactionStatus,
-                                                           processedAmount,
-                                                           processedCurrency,
-                                                           gatewayErrorCode,
-                                                           gatewayErrorMsg,
-                                                           internalCallContext);
-
+        final PaymentAndTransactionModelDao paymentAndTransactionModelDao = paymentDao.updatePaymentAndTransactionOnCompletion(paymentStateContext.getAccount().getId(),
+                                                                                                                               paymentStateContext.getAttemptId(),
+                                                                                                                               paymentStateContext.getPaymentId(),
+                                                                                                                               paymentStateContext.getTransactionType(),
+                                                                                                                               currentPaymentStateName,
+                                                                                                                               lastSuccessPaymentState,
+                                                                                                                               paymentStateContext.getPaymentTransactionModelDao().getId(),
+                                                                                                                               transactionStatus,
+                                                                                                                               processedAmount,
+                                                                                                                               processedCurrency,
+                                                                                                                               gatewayErrorCode,
+                                                                                                                               gatewayErrorMsg,
+                                                                                                                               internalCallContext);
         // Update the context
-        paymentStateContext.setPaymentTransactionModelDao(paymentDao.getPaymentTransaction(paymentStateContext.getPaymentTransactionModelDao().getId(), internalCallContext));
+        paymentStateContext.setPaymentModelDao(paymentAndTransactionModelDao.getPaymentModelDao());
+        paymentStateContext.setPaymentTransactionModelDao(paymentAndTransactionModelDao.getPaymentTransactionModelDao());
     }
 
-    public String getPaymentProviderPluginName(final boolean includeDeteled) throws PaymentApiException {
+    public String getPaymentProviderPluginName(final boolean includeDeleted) throws PaymentApiException {
         if (pluginName != null) {
             return pluginName;
         }
 
-        final UUID paymentMethodId = paymentStateContext.getPaymentMethodId();
-        final PaymentMethodModelDao methodDao = (includeDeteled) ? paymentDao.getPaymentMethodIncludedDeleted(paymentMethodId, internalCallContext) :
-                paymentDao.getPaymentMethod(paymentMethodId, internalCallContext);
-        if (methodDao == null) {
-            throw new PaymentApiException(ErrorCode.PAYMENT_NO_SUCH_PAYMENT_METHOD, paymentMethodId);
-        }
+        final PaymentMethodModelDao methodDao = paymentPluginServiceRegistration.getPaymentMethodById(paymentStateContext.getPaymentMethodId(), includeDeleted, internalCallContext);
         pluginName = methodDao.getPluginName();
+
         return pluginName;
     }
 
@@ -191,10 +188,7 @@ public class PaymentAutomatonDAOHelper {
             return paymentPluginApi;
         }
 
-        paymentPluginApi = pluginRegistry.getServiceForName(pluginName);
-        if (paymentPluginApi == null) {
-            throw new PaymentApiException(ErrorCode.PAYMENT_NO_SUCH_PAYMENT_PLUGIN, pluginName);
-        }
+        paymentPluginApi = paymentPluginServiceRegistration.getPaymentPluginApi(pluginName);
         return paymentPluginApi;
     }
 
@@ -202,11 +196,20 @@ public class PaymentAutomatonDAOHelper {
         final DateTime createdDate = utcNow;
         final DateTime updatedDate = utcNow;
 
-        return new PaymentModelDao(createdDate,
-                                   updatedDate,
-                                   paymentStateContext.getAccount().getId(),
-                                   paymentStateContext.getPaymentMethodId(),
-                                   paymentStateContext.getPaymentExternalKey());
+        if (paymentStateContext.getPaymentIdForNewPayment() != null) {
+            return new PaymentModelDao(paymentStateContext.getPaymentIdForNewPayment(),
+                                       createdDate,
+                                       updatedDate,
+                                       paymentStateContext.getAccount().getId(),
+                                       paymentStateContext.getPaymentMethodId(),
+                                       paymentStateContext.getPaymentExternalKey());
+        } else {
+            return new PaymentModelDao(createdDate,
+                                       updatedDate,
+                                       paymentStateContext.getAccount().getId(),
+                                       paymentStateContext.getPaymentMethodId(),
+                                       paymentStateContext.getPaymentExternalKey());
+        }
     }
 
     private PaymentTransactionModelDao buildNewPaymentTransactionModelDao(final UUID paymentId) {
@@ -216,18 +219,34 @@ public class PaymentAutomatonDAOHelper {
         final String gatewayErrorCode = null;
         final String gatewayErrorMsg = null;
 
-        return new PaymentTransactionModelDao(createdDate,
-                                              updatedDate,
-                                              paymentStateContext.getAttemptId(),
-                                              paymentStateContext.getPaymentTransactionExternalKey(),
-                                              paymentId,
-                                              paymentStateContext.getTransactionType(),
-                                              effectiveDate,
-                                              TransactionStatus.UNKNOWN,
-                                              paymentStateContext.getAmount(),
-                                              paymentStateContext.getCurrency(),
-                                              gatewayErrorCode,
-                                              gatewayErrorMsg);
+        if (paymentStateContext.getPaymentTransactionIdForNewPaymentTransaction() != null) {
+            return new PaymentTransactionModelDao(paymentStateContext.getPaymentTransactionIdForNewPaymentTransaction(),
+                                                  createdDate,
+                                                  updatedDate,
+                                                  paymentStateContext.getAttemptId(),
+                                                  paymentStateContext.getPaymentTransactionExternalKey(),
+                                                  paymentId,
+                                                  paymentStateContext.getTransactionType(),
+                                                  effectiveDate,
+                                                  TransactionStatus.UNKNOWN,
+                                                  paymentStateContext.getAmount(),
+                                                  paymentStateContext.getCurrency(),
+                                                  gatewayErrorCode,
+                                                  gatewayErrorMsg);
+        } else {
+            return new PaymentTransactionModelDao(createdDate,
+                                                  updatedDate,
+                                                  paymentStateContext.getAttemptId(),
+                                                  paymentStateContext.getPaymentTransactionExternalKey(),
+                                                  paymentId,
+                                                  paymentStateContext.getTransactionType(),
+                                                  effectiveDate,
+                                                  TransactionStatus.UNKNOWN,
+                                                  paymentStateContext.getAmount(),
+                                                  paymentStateContext.getCurrency(),
+                                                  gatewayErrorCode,
+                                                  gatewayErrorMsg);
+        }
     }
 
     public String getPluginName() {

@@ -122,6 +122,7 @@ CREATE UNIQUE INDEX payments_id ON payments(id);
 CREATE UNIQUE INDEX payments_key ON payments(external_key, tenant_record_id);
 CREATE INDEX payments_accnt ON payments(account_id);
 CREATE INDEX payments_tenant_account_record_id ON payments(tenant_record_id, account_record_id);
+CREATE INDEX payments_tenant_record_id_state_name ON payments(tenant_record_id, state_name);
 
 
 DROP TABLE IF EXISTS payment_history;
@@ -162,7 +163,7 @@ CREATE TABLE payment_transactions (
     processed_currency varchar(3),
     payment_id varchar(36) NOT NULL,
     gateway_error_code varchar(32),
-    gateway_error_msg varchar(256),
+    gateway_error_msg text,
     created_by varchar(50) NOT NULL,
     created_date datetime NOT NULL,
     updated_by varchar(50) NOT NULL,
@@ -193,7 +194,7 @@ CREATE TABLE payment_transaction_history (
     processed_currency varchar(3),
     payment_id varchar(36) NOT NULL,
     gateway_error_code varchar(32),
-    gateway_error_msg varchar(256),
+    gateway_error_msg text,
     change_type varchar(6) NOT NULL,
     created_by varchar(50) NOT NULL,
     created_date datetime NOT NULL,

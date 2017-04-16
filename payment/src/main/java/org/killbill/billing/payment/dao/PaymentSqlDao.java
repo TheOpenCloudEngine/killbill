@@ -45,17 +45,16 @@ public interface PaymentSqlDao extends EntitySqlDao<PaymentModelDao, Payment> {
 
     @SqlUpdate
     @Audited(ChangeType.UPDATE)
-    void updatePaymentStateName(@Bind("id") final String paymentId,
-                                @Bind("stateName") final String stateName,
-                                @BindBean final InternalCallContext context);
-
+    Object updatePaymentStateName(@Bind("id") final String paymentId,
+                                  @Bind("stateName") final String stateName,
+                                  @BindBean final InternalCallContext context);
 
     @SqlUpdate
     @Audited(ChangeType.UPDATE)
-    void updateLastSuccessPaymentStateName(@Bind("id") final String paymentId,
-                                @Bind("stateName") final String stateName,
-                                @Bind("lastSuccessStateName") final String lastSuccessStateName,
-                                @BindBean final InternalCallContext context);
+    Object updateLastSuccessPaymentStateName(@Bind("id") final String paymentId,
+                                             @Bind("stateName") final String stateName,
+                                             @Bind("lastSuccessStateName") final String lastSuccessStateName,
+                                             @BindBean final InternalCallContext context);
 
     @SqlQuery
     public PaymentModelDao getPaymentByExternalKey(@Bind("externalKey") final String externalKey,
@@ -69,10 +68,23 @@ public interface PaymentSqlDao extends EntitySqlDao<PaymentModelDao, Payment> {
 
     @SqlQuery
     @SmartFetchSize(shouldStream = true)
+    public Iterator<PaymentModelDao> searchByState(@PaymentStateCollectionBinder final Collection<String> paymentStates,
+                                                   @Bind("offset") final Long offset,
+                                                   @Bind("rowCount") final Long rowCount,
+                                                   @Define("ordering") final String ordering,
+                                                   @BindBean final InternalTenantContext context);
+
+    @SqlQuery
+    public Long getSearchByStateCount(@PaymentStateCollectionBinder final Collection<String> paymentStates,
+                                      @BindBean final InternalTenantContext context);
+
+    @SqlQuery
+    @SmartFetchSize(shouldStream = true)
     public Iterator<PaymentModelDao> getByPluginName(@Bind("pluginName") final String pluginName,
                                                      @Bind("offset") final Long offset,
                                                      @Bind("rowCount") final Long rowCount,
-                                                           @BindBean final InternalTenantContext context);
+                                                     @Define("ordering") final String ordering,
+                                                     @BindBean final InternalTenantContext context);
 
     @SqlQuery
     public Long getCountByPluginName(@Bind("pluginName") final String pluginName,

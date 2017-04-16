@@ -181,6 +181,10 @@ public class TestPatternObfuscator extends ServerTestSuiteNoDB {
                "    \"id\": \"card_483etw4er9fg4vF3sQdrt3FG\",\n" +
                "    \"object\": \"card\",\n" +
                "    \"banknumber\": 4111111111111111,\n" +
+               "    \"cvv\" : 111,\n" +
+               "    \"cvv\": 111,\n" +
+               "    \"cvv\": \"111\",\n" +
+               "    \"data\": {\"cvv\" : 111 },\n" +
                "    \"last4\": \"0000\",\n" +
                "    \"brand\": \"Visa\",\n" +
                "    \"funding\": \"credit\",\n" +
@@ -204,6 +208,10 @@ public class TestPatternObfuscator extends ServerTestSuiteNoDB {
                "    \"id\": \"card_483etw4er9fg4vF3sQdrt3FG\",\n" +
                "    \"object\": \"card\",\n" +
                "    \"banknumber\": ****************,\n" +
+               "    \"cvv\" : ***,\n" +
+               "    \"cvv\": ***,\n" +
+               "    \"cvv\": *****,\n" +
+               "    \"data\": {\"cvv\" : ****},\n" +
                "    \"last4\": \"0000\",\n" +
                "    \"brand\": \"Visa\",\n" +
                "    \"funding\": \"credit\",\n" +
@@ -276,6 +284,12 @@ public class TestPatternObfuscator extends ServerTestSuiteNoDB {
                "1 < Content-Type: application/json\n" +
                "1 < X-Killbill-Profiling-Resp: {\"rawData\":[{\"name\":\"DAO:AccountSqlDao:getById\",\"durationUsec\":14873},{\"name\":\"DAO:PaymentMethodSqlDao:getById\",\"durationUsec\":10438},{\"name\":\"DAO:PaymentSqlDao:create\",\"durationUsec\":31750},{\"name\":\"DAO:TransactionSqlDao:create\",\"durationUsec\":23121},{\"name\":\"DAO:PaymentSqlDao:getById\",\"durationUsec\":2541},{\"name\":\"DAO:TransactionSqlDao:getByPaymentId\",\"durationUsec\":3574},{\"name\":\"DAO:PaymentMethodSqlDao:getPaymentMethodIncludedDelete\",\"durationUsec\":1763},{\"name\":\"DAO:TransactionSqlDao:updateTransactionStatus\",\"durationUsec\":13994},{\"name\":\"DAO:PaymentSqlDao:updatePaymentStateName\",\"durationUsec\":11929},{\"name\":\"DAO:TransactionSqlDao:getById\",\"durationUsec\":5245}]}",
                event);
+    }
+
+    @Test(groups = "fast")
+    public void testPluginProperties() throws Exception {
+        verify("ENTERING onSuccessCall paymentMethodId='e92a3bfd-0713-4396-a1e2-ff46cb051f8c' ccVerificationValue='123' ccNumber = '4111111111111111' ccTrackData=\"XXX\" ccFirstName = \"John\" ccLastName=\"'Smith'\"",
+               "ENTERING onSuccessCall paymentMethodId='e92a3bfd-0713-4396-a1e2-ff46cb051f8c' ccVerificationValue='***' ccNumber = '****************' ccTrackData=\"***\" ccFirstName = \"****\" ccLastName=\"*******\"");
     }
 
     private void verify(final String input, final ILoggingEvent event) {

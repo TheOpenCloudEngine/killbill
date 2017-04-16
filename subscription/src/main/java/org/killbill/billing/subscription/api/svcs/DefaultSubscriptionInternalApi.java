@@ -1,7 +1,7 @@
 /*
  * Copyright 2010-2013 Ning, Inc.
- * Copyright 2014-2016 Groupon, Inc
- * Copyright 2014-2016 The Billing Project, LLC
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
  * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -23,6 +23,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -64,9 +65,7 @@ import org.killbill.billing.subscription.api.SubscriptionBaseTransitionType;
 import org.killbill.billing.subscription.api.SubscriptionBaseWithAddOns;
 import org.killbill.billing.subscription.api.user.DefaultEffectiveSubscriptionEvent;
 import org.killbill.billing.subscription.api.user.DefaultSubscriptionBase;
-import org.killbill.billing.subscription.api.user.DefaultSubscriptionBaseApiService;
 import org.killbill.billing.subscription.api.user.DefaultSubscriptionBaseBundle;
-import org.killbill.billing.subscription.api.user.DefaultSubscriptionBaseWithAddOns;
 import org.killbill.billing.subscription.api.user.DefaultSubscriptionStatusDryRun;
 import org.killbill.billing.subscription.api.user.SubscriptionAndAddOnsSpecifier;
 import org.killbill.billing.subscription.api.user.SubscriptionBaseApiException;
@@ -101,6 +100,7 @@ import org.killbill.notificationq.api.NotificationQueueService.NoSuchNotificatio
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
@@ -192,6 +192,7 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
             return apiService.createPlan(new SubscriptionBuilder()
                                                  .setId(UUIDs.randomUUID())
                                                  .setBundleId(bundleId)
+                                                 .setBundleExternalKey(bundle.getExternalKey())
                                                  .setCategory(plan.getProduct().getCategory())
                                                  .setBundleStartDate(bundleStartDate)
                                                  .setAlignStartDate(effectiveDate)
@@ -202,14 +203,17 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
         }
     }
 
-    private List<SubscriptionSpecifier> verifyAndBuildSubscriptionSpecifiers(final UUID bundleId, final Iterable<EntitlementSpecifier> entitlements, final boolean isMigrated, final InternalCallContext context, final DateTime now, final DateTime effectiveDate, final Catalog catalog, final CallContext callContext) throws SubscriptionBaseApiException, CatalogApiException {
+    private List<SubscriptionSpecifier> verifyAndBuildSubscriptionSpecifiers(final UUID bundleId, final String externalKey, final Iterable<EntitlementSpecifier> entitlements, final boolean isMigrated, final InternalCallContext context, final DateTime now, final DateTime effectiveDate, final Catalog catalog, final CallContext callContext) throws SubscriptionBaseApiException, CatalogApiException {
         final List<SubscriptionSpecifier> subscriptions = new ArrayList<SubscriptionSpecifier>();
-        boolean first = true;
         final List<SubscriptionBase> subscriptionsForBundle = getSubscriptionsForBundle(bundleId, null, context);
 
         for (final EntitlementSpecifier entitlement : entitlements) {
 
             final PlanPhaseSpecifier spec = entitlement.getPlanPhaseSpecifier();
+            if (spec == null) {
+                // BP already exists
+                continue;
+            }
 
             final PlanPhasePriceOverridesWithCallContext overridesWithContext = new DefaultPlanPhasePriceOverridesWithCallContext(entitlement.getOverrides(), callContext);
 
@@ -220,12 +224,6 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
                                                               spec.getProductName(), spec.getBillingPeriod().toString(), plan.getPriceListName()));
             }
 
-            if (first) {
-                first = false;
-                if (plan.getProduct().getCategory() != ProductCategory.BASE) {
-                    throw new SubscriptionBaseApiException(new IllegalArgumentException(), ErrorCode.SUB_CREATE_NO_BP.getCode(), "Missing Base Subscription.");
-                }
-            }
 
             // verify the number of subscriptions (of the same kind) allowed per bundle and the existing ones
             if (ProductCategory.ADD_ON.toString().equalsIgnoreCase(plan.getProduct().getCategory().toString())) {
@@ -248,6 +246,7 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
             subscription.setBuilder(new SubscriptionBuilder()
                                             .setId(UUIDs.randomUUID())
                                             .setBundleId(bundleId)
+                                            .setBundleExternalKey(externalKey)
                                             .setCategory(plan.getProduct().getCategory())
                                             .setBundleStartDate(effectiveDate)
                                             .setAlignStartDate(effectiveDate)
@@ -257,6 +256,37 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
         }
         return subscriptions;
     }
+
+    private boolean sanityAndReorderBPSpecFirst(final Catalog catalog, final BaseEntitlementWithAddOnsSpecifier entitlementWithAddOnsSpecifier, final DateTime effectiveDate, final List<EntitlementSpecifier> outputEntitlementSpecifier) throws SubscriptionBaseApiException {
+
+
+        EntitlementSpecifier basePlanSpecifier = null;
+        final List<EntitlementSpecifier> addOnSpecifiers = new ArrayList<EntitlementSpecifier>();
+        try {
+            for (final EntitlementSpecifier cur : entitlementWithAddOnsSpecifier.getEntitlementSpecifier()) {
+                final Plan inputPlan = catalog.createOrFindPlan(cur.getPlanPhaseSpecifier(), null, effectiveDate);
+                final boolean isBaseSpecifier = inputPlan.getProduct().getCategory() == ProductCategory.BASE;
+                if (isBaseSpecifier) {
+                    if (basePlanSpecifier == null) {
+                        basePlanSpecifier =  cur;
+                    } else {
+                        throw new SubscriptionBaseApiException(ErrorCode.SUB_CREATE_INVALID_ENTITLEMENT_SPECIFIER);
+                    }
+                } else {
+                    addOnSpecifiers.add(cur);
+                }
+            }
+        } catch (final CatalogApiException e) {
+            throw new SubscriptionBaseApiException(e);
+        }
+
+        if (basePlanSpecifier != null) {
+            outputEntitlementSpecifier.add(basePlanSpecifier);
+        }
+        outputEntitlementSpecifier.addAll(addOnSpecifiers);
+        return basePlanSpecifier != null;
+    }
+
 
     @Override
     public List<SubscriptionBaseWithAddOns> createBaseSubscriptionsWithAddOns(final UUID accountId, final Iterable<BaseEntitlementWithAddOnsSpecifier> baseEntitlementWithAddOnsSpecifier, final InternalCallContext context) throws SubscriptionBaseApiException {
@@ -270,13 +300,32 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
                 final DateTime effectiveDate = (entitlementWithAddOnsSpecifier.getBillingEffectiveDate() != null) ?
                                                DefaultClock.truncateMs(entitlementWithAddOnsSpecifier.getBillingEffectiveDate().toDateTimeAtStartOfDay()) : now;
 
-                final SubscriptionBaseBundle bundle = createBundleForAccount(accountId, entitlementWithAddOnsSpecifier.getExternalKey(), context);
+
+
+                final List<EntitlementSpecifier> reorderedSpecifiers = new ArrayList<EntitlementSpecifier>();
+                final boolean isBaseSpecifierExists = sanityAndReorderBPSpecFirst(catalog, entitlementWithAddOnsSpecifier, effectiveDate, reorderedSpecifiers);
+
+                final SubscriptionBaseBundle bundle;
+                if (isBaseSpecifierExists) {
+                    bundle = createBundleForAccount(accountId, entitlementWithAddOnsSpecifier.getExternalKey(), context);
+                } else {
+                    final List<SubscriptionBaseBundle> existingBundles = dao.getSubscriptionBundlesForKey(entitlementWithAddOnsSpecifier.getExternalKey(), context);
+                    final SubscriptionBaseBundle tmp = getActiveBundleForKeyNotException(existingBundles, dao, clock, context);
+                    if (tmp == null) {
+                        throw new SubscriptionBaseApiException(ErrorCode.SUB_CREATE_NO_BP, entitlementWithAddOnsSpecifier.getExternalKey());
+                    } else if (!tmp.getAccountId().equals(accountId)) {
+                        throw new SubscriptionBaseApiException(ErrorCode.SUB_CREATE_ACTIVE_BUNDLE_KEY_EXISTS, entitlementWithAddOnsSpecifier.getExternalKey());
+                    } else {
+                        bundle = tmp;
+                    }
+                }
 
                 final SubscriptionAndAddOnsSpecifier subscriptionAndAddOnsSpecifier = new SubscriptionAndAddOnsSpecifier(
                         bundle.getId(),
                         effectiveDate,
                         verifyAndBuildSubscriptionSpecifiers(bundle.getId(),
-                                                             entitlementWithAddOnsSpecifier.getEntitlementSpecifier(),
+                                                             bundle.getExternalKey(),
+                                                             reorderedSpecifiers,
                                                              entitlementWithAddOnsSpecifier.isMigrated(),
                                                              context,
                                                              now,
@@ -313,7 +362,7 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
     }
 
     @Override
-    public void cancelBaseSubscriptions(final Iterable<SubscriptionBase> subscriptions, final BillingActionPolicy policy, final InternalCallContext context) throws SubscriptionBaseApiException {
+    public void cancelBaseSubscriptions(final Iterable<SubscriptionBase> subscriptions, final BillingActionPolicy policy, final DateTimeZone accountTimeZone, int accountBillCycleDayLocal, final InternalCallContext context) throws SubscriptionBaseApiException {
         apiService.cancelWithPolicyNoValidation(Iterables.<SubscriptionBase, DefaultSubscriptionBase>transform(subscriptions,
                                                                                                                new Function<SubscriptionBase, DefaultSubscriptionBase>() {
                                                                                                                    @Override
@@ -326,13 +375,43 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
                                                                                                                    }
                                                                                                                }),
                                                 policy,
+                                                accountTimeZone,
+                                                accountBillCycleDayLocal,
                                                 context);
     }
+
 
     @Override
     public SubscriptionBaseBundle createBundleForAccount(final UUID accountId, final String bundleKey, final InternalCallContext context) throws SubscriptionBaseApiException {
 
         final List<SubscriptionBaseBundle> existingBundles = dao.getSubscriptionBundlesForKey(bundleKey, context);
+
+        //
+        // Because the creation of the SubscriptionBundle is not atomic (with creation of Subscription/SubscriptionEvent), we verify if we were left
+        // with an empty SubscriptionBaseBundle form a past failing operation (See #684). We only allow reuse if such SubscriptionBaseBundle is fully
+        // empty (and don't allow use case where all Subscription are cancelled, which is the condition for that key to be re-used)
+        // Such condition should have been checked upstream (to decide whether that key is valid or not)
+        //
+        final SubscriptionBaseBundle existingBundleForAccount = Iterables.tryFind(existingBundles, new Predicate<SubscriptionBaseBundle>() {
+            @Override
+            public boolean apply(final SubscriptionBaseBundle input) {
+                return input.getAccountId().equals(accountId);
+            }
+        }).orNull();
+
+        // If Bundle already exists, and there is 0 Subscription, we reuse
+        if (existingBundleForAccount != null) {
+            try {
+                final Map<UUID, List<SubscriptionBase>> accountSubscriptions = dao.getSubscriptionsForAccount(context);
+                final List<SubscriptionBase> subscriptions = accountSubscriptions.get(existingBundleForAccount.getId());
+                if (subscriptions == null || subscriptions.size() == 0) {
+                    return existingBundleForAccount;
+                }
+            } catch (final CatalogApiException e) {
+                throw new SubscriptionBaseApiException(e);
+            }
+        }
+
         final DateTime now = clock.getUTCNow();
         final DateTime originalCreatedDate = !existingBundles.isEmpty() ? existingBundles.get(0).getCreatedDate() : now;
         final DefaultSubscriptionBaseBundle bundle = new DefaultSubscriptionBaseBundle(bundleKey, accountId, now, originalCreatedDate, now, now);
@@ -639,6 +718,7 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
                     final SubscriptionBuilder builder = new SubscriptionBuilder()
                             .setId(subscriptionId)
                             .setBundleId(bundleId)
+                            .setBundleExternalKey(null)
                             .setCategory(plan.getProduct().getCategory())
                             .setBundleStartDate(bundleStartDate)
                             .setAlignStartDate(startEffectiveDate);
@@ -649,21 +729,24 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
 
                 case CHANGE:
                     final DefaultSubscriptionBase subscriptionForChange = (DefaultSubscriptionBase) dao.getSubscriptionFromId(dryRunArguments.getSubscriptionId(), context);
-                    DateTime changeEffectiveDate = dryRunArguments.getEffectiveDate() != null ? context.toUTCDateTime(dryRunArguments.getEffectiveDate()) : null;
+
+                    DateTime changeEffectiveDate = getDryRunEffectiveDate(dryRunArguments.getEffectiveDate(), subscriptionForChange, context);
                     if (changeEffectiveDate == null) {
                         BillingActionPolicy policy = dryRunArguments.getBillingActionPolicy();
                         if (policy == null) {
                             final PlanChangeResult planChangeResult = apiService.getPlanChangeResult(subscriptionForChange, inputSpec, utcNow, tenantContext);
                             policy = planChangeResult.getPolicy();
                         }
-                        changeEffectiveDate = subscriptionForChange.getPlanChangeEffectiveDate(policy);
+                        // We pass null for billingAlignment, accountTimezone, account BCD because this is not available which means that dryRun with START_OF_TERM BillingPolicy will fail
+                        changeEffectiveDate = subscriptionForChange.getPlanChangeEffectiveDate(policy, null, null, -1, context);
                     }
                     dryRunEvents = apiService.getEventsOnChangePlan(subscriptionForChange, plan, plan.getPriceListName(), changeEffectiveDate, utcNow, true, context);
                     break;
 
                 case STOP_BILLING:
                     final DefaultSubscriptionBase subscriptionForCancellation = (DefaultSubscriptionBase) dao.getSubscriptionFromId(dryRunArguments.getSubscriptionId(), context);
-                    DateTime cancelEffectiveDate = dryRunArguments.getEffectiveDate() != null ? context.toUTCDateTime(dryRunArguments.getEffectiveDate()) : null;
+
+                    DateTime cancelEffectiveDate = getDryRunEffectiveDate(dryRunArguments.getEffectiveDate(), subscriptionForCancellation, context);
                     if (dryRunArguments.getEffectiveDate() == null) {
                         BillingActionPolicy policy = dryRunArguments.getBillingActionPolicy();
                         if (policy == null) {
@@ -673,7 +756,8 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
                                                                                    subscriptionForCancellation.getCurrentPhase().getPhaseType());
                             policy = catalogService.getFullCatalog(true, true, context).planCancelPolicy(spec, utcNow);
                         }
-                        cancelEffectiveDate = subscriptionForCancellation.getPlanChangeEffectiveDate(policy);
+                        // We pass null for billingAlignment, accountTimezone, account BCD because this is not available which means that dryRun with START_OF_TERM BillingPolicy will fail
+                        cancelEffectiveDate = subscriptionForCancellation.getPlanChangeEffectiveDate(policy, null, null, -1, context);
                     }
                     dryRunEvents = apiService.getEventsOnCancelPlan(subscriptionForCancellation, cancelEffectiveDate, utcNow, true, context);
                     break;
@@ -689,12 +773,27 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
         }
     }
 
+    private DateTime getDryRunEffectiveDate(@Nullable final LocalDate inputDate, final DefaultSubscriptionBase subscription, final InternalTenantContext context) {
+        if (inputDate == null) {
+            return null;
+        }
+
+        // We first use context account reference time to get a candidate)
+        final DateTime tmp = context.toUTCDateTime(inputDate);
+        // If we realize that the candidate is on the same LocalDate boundary as the subscription startDate but a bit prior we correct it to avoid weird things down the line
+        if (inputDate.compareTo(context.toLocalDate(subscription.getStartDate())) == 0 && tmp.compareTo(subscription.getStartDate()) < 0) {
+            return subscription.getStartDate();
+        } else {
+            return tmp;
+        }
+    }
+
     @Override
     public Iterable<DateTime> getFutureNotificationsForAccount(final InternalCallContext internalCallContext) {
         try {
             final NotificationQueue notificationQueue = notificationQueueService.getNotificationQueue(DefaultSubscriptionBaseService.SUBSCRIPTION_SERVICE_NAME,
                                                                                                       DefaultSubscriptionBaseService.NOTIFICATION_QUEUE_NAME);
-            final List<NotificationEventWithMetadata<NotificationEvent>> futureNotifications = notificationQueue.getFutureNotificationForSearchKeys(internalCallContext.getAccountRecordId(), internalCallContext.getTenantRecordId());
+            final Iterable<NotificationEventWithMetadata<NotificationEvent>> futureNotifications = notificationQueue.getFutureNotificationForSearchKeys(internalCallContext.getAccountRecordId(), internalCallContext.getTenantRecordId());
             return Iterables.transform(futureNotifications, new Function<NotificationEventWithMetadata<NotificationEvent>, DateTime>() {
                 @Nullable
                 @Override
@@ -754,7 +853,8 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
         }
     }
 
-    private DateTime getEffectiveDateForNewBCD(final int bcd, @Nullable final LocalDate effectiveFromDate, final InternalCallContext internalCallContext) {
+    @VisibleForTesting
+    DateTime getEffectiveDateForNewBCD(final int bcd, @Nullable final LocalDate effectiveFromDate, final InternalCallContext internalCallContext) {
         if (internalCallContext.getAccountRecordId() == null) {
             throw new IllegalStateException("Need to have a valid context with accountRecordId");
         }
@@ -774,7 +874,7 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
             final int lastDayOfNextMonth = startDatePlusOneMonth.dayOfMonth().getMaximumValue();
             final int originalBCDORLastDayOfMonth = bcd <= lastDayOfNextMonth ? bcd : lastDayOfNextMonth;
             requestedDate = new LocalDate(startDatePlusOneMonth.getYear(), startDatePlusOneMonth.getMonthOfYear(), originalBCDORLastDayOfMonth);
-        } else if (bcd == currentDay) {
+        } else if (bcd == currentDay && effectiveFromDate == null) {
             // will default to immediate event
             requestedDate = null;
         } else if (bcd <= lastDayOfMonth) {
@@ -784,6 +884,7 @@ public class DefaultSubscriptionInternalApi extends SubscriptionApiBase implemen
         }
         return requestedDate == null ? clock.getUTCNow() : internalCallContext.toUTCDateTime(requestedDate);
     }
+
 
     private DateTime getBundleStartDateWithSanity(final UUID bundleId, @Nullable final DefaultSubscriptionBase baseSubscription, final Plan plan,
                                                   final DateTime effectiveDate, final InternalTenantContext context) throws SubscriptionBaseApiException, CatalogApiException {

@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.killbill.billing.callcontext.InternalCallContext;
 import org.killbill.billing.callcontext.InternalTenantContext;
 import org.killbill.billing.catalog.api.BillingActionPolicy;
@@ -56,10 +57,10 @@ public interface SubscriptionBaseApiService {
     public boolean cancelWithRequestedDate(DefaultSubscriptionBase subscription, DateTime requestedDate, CallContext context)
             throws SubscriptionBaseApiException;
 
-    public boolean cancelWithPolicy(DefaultSubscriptionBase subscription, BillingActionPolicy policy, CallContext context)
+    public boolean cancelWithPolicy(DefaultSubscriptionBase subscription, BillingActionPolicy policy, DateTimeZone accountTimeZone, int accountBillCycleDayLocal, CallContext context)
             throws SubscriptionBaseApiException;
 
-    public boolean cancelWithPolicyNoValidation(Iterable<DefaultSubscriptionBase> subscriptions, BillingActionPolicy policy, InternalCallContext context)
+    public boolean cancelWithPolicyNoValidation(Iterable<DefaultSubscriptionBase> subscriptions, BillingActionPolicy policy, DateTimeZone accountTimeZone, int accountBillCycleDayLocal, InternalCallContext context)
             throws SubscriptionBaseApiException;
 
     public boolean uncancel(DefaultSubscriptionBase subscription, CallContext context)
@@ -82,7 +83,7 @@ public interface SubscriptionBaseApiService {
                                          List<PlanPhasePriceOverride> overrides, BillingActionPolicy policy, CallContext context)
             throws SubscriptionBaseApiException;
 
-    public int cancelAddOnsIfRequiredOnBasePlanEvent(final DefaultSubscriptionBase subscription, final SubscriptionBaseEvent event, final CallContext context) throws CatalogApiException;
+    public int handleBasePlanEvent(final DefaultSubscriptionBase subscription, final SubscriptionBaseEvent event, final CallContext context) throws CatalogApiException;
 
     public PlanChangeResult getPlanChangeResult(final DefaultSubscriptionBase subscription, PlanSpecifier spec, final DateTime effectiveDate, TenantContext context) throws SubscriptionBaseApiException;
 

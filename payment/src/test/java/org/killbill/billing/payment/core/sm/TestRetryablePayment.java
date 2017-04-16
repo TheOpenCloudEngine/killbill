@@ -1,6 +1,6 @@
 /*
- * Copyright 2014-2016 Groupon, Inc
- * Copyright 2014-2016 The Billing Project, LLC
+ * Copyright 2014-2017 Groupon, Inc
+ * Copyright 2014-2017 The Billing Project, LLC
  *
  * The Billing Project licenses this file to you under the Apache License, version 2.0
  * (the "License"); you may not use this file except in compliance with the
@@ -160,7 +160,7 @@ public class TestRetryablePayment extends PaymentTestSuiteNoDB {
         runner = new MockRetryablePaymentAutomatonRunner(
                 paymentDao,
                 locker,
-                pluginRegistry,
+                paymentPluginServiceRegistration,
                 retryPluginRegistry,
                 clock,
                 tagApi,
@@ -177,7 +177,9 @@ public class TestRetryablePayment extends PaymentTestSuiteNoDB {
                 new PaymentStateControlContext(ImmutableList.<String>of(MockPaymentControlProviderPlugin.PLUGIN_NAME),
                                                true,
                                                null,
+                                               null,
                                                paymentExternalKey,
+                                               null,
                                                paymentTransactionExternalKey,
                                                TransactionType.AUTHORIZE,
                                                account,
@@ -198,7 +200,7 @@ public class TestRetryablePayment extends PaymentTestSuiteNoDB {
                                                         paymentDao,
                                                         clock);
 
-        processor = new PluginControlPaymentProcessor(pluginRegistry,
+        processor = new PluginControlPaymentProcessor(paymentPluginServiceRegistration,
                                                       accountInternalApi,
                                                       null,
                                                       tagApi,
@@ -720,7 +722,7 @@ public class TestRetryablePayment extends PaymentTestSuiteNoDB {
         GlobalLock lock = null;
         try {
             // Grab lock so that operation later will fail...
-            lock = locker.lockWithNumberOfTries(LockerType.ACCNT_INV_PAY.toString(), account.getExternalKey(), 1);
+            lock = locker.lockWithNumberOfTries(LockerType.ACCNT_INV_PAY.toString(), account.getId().toString(), 1);
 
             mockRetryProviderPlugin
                     .setAborted(false)
