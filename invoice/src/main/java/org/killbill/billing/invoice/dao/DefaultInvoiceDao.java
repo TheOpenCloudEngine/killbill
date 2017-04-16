@@ -517,7 +517,6 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                                                final Map<UUID, BigDecimal> invoiceItemIdsWithNullAmounts, final String transactionExternalKey,
                                                final InternalCallContext context) throws InvoiceApiException {
 
-
         if (isInvoiceAdjusted && invoiceItemIdsWithNullAmounts.size() == 0) {
             throw new InvoiceApiException(ErrorCode.INVOICE_ITEMS_ADJUSTMENT_MISSING);
         }
@@ -792,7 +791,6 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
         });
     }
 
-
     @Override
     public void notifyOfPaymentInit(final InvoicePaymentModelDao invoicePayment, final InternalCallContext context) {
         notifyOfPaymentCompletionInternal(invoicePayment, false, context);
@@ -1052,9 +1050,9 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
             validateInvoiceItemToBeAdjusted(invoiceItemSqlDao, invoiceItemModelDao, context);
         }
 
-        try{
+        try {
             this.modifyDescriptionOfInvoiceItem(invoiceItemModelDao);
-        }catch (Exception ex){
+        } catch (Exception ex) {
             ex.printStackTrace();
         }
         return createAndRefresh(invoiceItemSqlDao, invoiceItemModelDao, context);
@@ -1114,7 +1112,15 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
 
         //usage item 일 경우
         if (usageName != null && usageName.length() > 0) {
-            List<Phase> phases = currentPlan.getInitialPhases();
+            List<Phase> initialPhases = currentPlan.getInitialPhases();
+            Phase finalPhase = currentPlan.getFinalPhase();
+            List<Phase> phases = new ArrayList<Phase>();
+
+            if(initialPhases != null){
+                phases.addAll(initialPhases);
+            }
+            phases.add(finalPhase);
+
             for (final Phase phase : phases) {
                 List<Usage> usages = phase.getUsages();
                 if (usages != null) {
@@ -1333,14 +1339,14 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                                                                             InvoiceStatus.COMMITTED);
                 final String chargeDescription = "Charge to move credit from child to parent account";
                 final InvoiceItem externalChargeItem = new ExternalChargeInvoiceItem(UUIDs.randomUUID(),
-                                                                                 childCreatedDate,
-                                                                                 invoiceForExternalCharge.getId(),
-                                                                                 childAccount.getId(),
-                                                                                 null,
-                                                                                 chargeDescription,
-                                                                                 childCreatedDate.toLocalDate(),
-                                                                                 accountCBA,
-                                                                                 childAccount.getCurrency());
+                                                                                     childCreatedDate,
+                                                                                     invoiceForExternalCharge.getId(),
+                                                                                     childAccount.getId(),
+                                                                                     null,
+                                                                                     chargeDescription,
+                                                                                     childCreatedDate.toLocalDate(),
+                                                                                     accountCBA,
+                                                                                     childAccount.getCurrency());
                 invoiceForExternalCharge.addInvoiceItem(externalChargeItem);
 
                 // create credit to parent account
@@ -1361,7 +1367,6 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
                                                                         accountCBA.negate(),
                                                                         childAccount.getCurrency());
                 invoiceForCredit.addInvoiceItem(creditItem);
-
 
                 // save invoices and invoice items
                 final InvoiceModelDao childInvoice = new InvoiceModelDao(invoiceForExternalCharge);

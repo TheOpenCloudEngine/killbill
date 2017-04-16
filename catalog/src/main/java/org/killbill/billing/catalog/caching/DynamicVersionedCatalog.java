@@ -60,6 +60,7 @@ import org.killbill.billing.catalog.api.BillingActionPolicy;
 import org.killbill.billing.catalog.api.BillingAlignment;
 import org.killbill.billing.catalog.api.BillingMode;
 import org.killbill.billing.catalog.api.BillingPeriod;
+import org.killbill.billing.catalog.api.BlockType;
 import org.killbill.billing.catalog.api.CatalogApiException;
 import org.killbill.billing.catalog.api.CatalogUserApi;
 import org.killbill.billing.catalog.api.Currency;
@@ -495,19 +496,15 @@ public class DynamicVersionedCatalog {
                         return this.string.toString();
                     }
                 };
-                Marshaller m = marshaller(StandaloneCatalog.class);
-                m.marshal(catalog, output);
-                System.out.println(output);
-
+//                Marshaller m = marshaller(StandaloneCatalog.class);
+//                m.marshal(catalog, output);
+//                System.out.println(output);
 
                 /**
                  * final
                  */
                 versionedCatalog.add(catalog);
             }
-
-            ValidationErrors validate = versionedCatalog.validate(versionedCatalog, new ValidationErrors());
-
             return versionedCatalog;
 
         } catch (Exception ex) {
@@ -596,6 +593,7 @@ public class DynamicVersionedCatalog {
                     catalogUnits.add(tier.getUnit());
 
                     defaultTieredBlock.setPrices(convertPrice(tier.getPrices(), catalogCurrencies));
+                    defaultTieredBlock.setType(BlockType.TIERED);
 
                     defaultTieredBlocks.add(defaultTieredBlock);
                     defaultTier.setBlocks(defaultTieredBlocks.toArray(new DefaultTieredBlock[defaultTieredBlocks.size()]));
