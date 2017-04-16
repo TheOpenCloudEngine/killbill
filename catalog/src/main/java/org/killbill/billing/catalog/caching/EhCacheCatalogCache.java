@@ -98,7 +98,6 @@ public class EhCacheCatalogCache implements CatalogCache {
             return pluginVersionedCatalog;
         }
 
-        if (InternalCallContextFactory.INTERNAL_TENANT_RECORD_ID.equals(tenantContext.getTenantRecordId())) {
         //동적 카달로드 로직 추가
         String property = System.getProperty("org.killbill.catalog.mode");
         if ("dynamic".equals(property) && tenantContext.getAccountRecordId() != null) {
@@ -108,7 +107,7 @@ public class EhCacheCatalogCache implements CatalogCache {
             }
         }
 
-        if (tenantContext.getTenantRecordId() == InternalCallContextFactory.INTERNAL_TENANT_RECORD_ID) {
+        if (InternalCallContextFactory.INTERNAL_TENANT_RECORD_ID.equals(tenantContext.getTenantRecordId())) {
             return useDefaultCatalog ? defaultCatalog : null;
         }
         // The cache loader might choke on some bad xml -- unlikely since we check its validity prior storing it,

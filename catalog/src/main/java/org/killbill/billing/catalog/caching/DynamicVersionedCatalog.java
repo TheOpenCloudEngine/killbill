@@ -61,6 +61,7 @@ import org.killbill.billing.catalog.api.BillingAlignment;
 import org.killbill.billing.catalog.api.BillingMode;
 import org.killbill.billing.catalog.api.BillingPeriod;
 import org.killbill.billing.catalog.api.CatalogApiException;
+import org.killbill.billing.catalog.api.CatalogUserApi;
 import org.killbill.billing.catalog.api.Currency;
 import org.killbill.billing.catalog.api.PhaseType;
 import org.killbill.billing.catalog.api.PlanAlignmentChange;
@@ -78,6 +79,7 @@ import org.killbill.billing.catalog.rules.DefaultCaseChangePlanPolicy;
 import org.killbill.billing.catalog.rules.DefaultCaseCreateAlignment;
 import org.killbill.billing.catalog.rules.DefaultPlanRules;
 import org.killbill.clock.Clock;
+import org.killbill.xmlloader.ValidationErrors;
 import org.killbill.xmlloader.XMLSchemaGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -493,15 +495,18 @@ public class DynamicVersionedCatalog {
                         return this.string.toString();
                     }
                 };
-                //                Marshaller m = marshaller(StandaloneCatalog.class);
-                //                m.marshal(catalog, output);
-                //                System.out.println(output);
+                Marshaller m = marshaller(StandaloneCatalog.class);
+                m.marshal(catalog, output);
+                System.out.println(output);
+
 
                 /**
                  * final
                  */
                 versionedCatalog.add(catalog);
             }
+
+            ValidationErrors validate = versionedCatalog.validate(versionedCatalog, new ValidationErrors());
 
             return versionedCatalog;
 
@@ -621,23 +626,5 @@ public class DynamicVersionedCatalog {
         }
         internationalPrice.setPrices(defaultPrices.toArray(new DefaultPrice[defaultPrices.size()]));
         return internationalPrice;
-    }
-
-    private StandaloneCatalog buildLargeCatalog(int month) throws CatalogApiException {
-        this.recurringBillingMode = BillingMode.IN_ADVANCE;
-
-        //final CatalogUpdater catalogUpdater = new CatalogUpdater(DEFAULT_CATALOG_NAME, recurringBillingMode, new DateTime(2016, month, 8, 0, 0), null);
-        final CatalogUpdater catalogUpdater = new CatalogUpdater(DEFAULT_CATALOG_NAME, recurringBillingMode, new DateTime(2016, month, 8, 0, 0), BillingAlignment.ACCOUNT, null);
-
-        int MAX_PLANS = 10;
-        for (int i = 1; i <= MAX_PLANS; i++) {
-            final SimplePlanDescriptor desc = new DefaultSimplePlanDescriptor("foo-monthly-" + i + "-pl", "Foo", ProductCategory.BASE, Currency.USD, BigDecimal.valueOf(100), BillingPeriod.MONTHLY, 0, TimeUnit.UNLIMITED, ImmutableList.<String>of());
-            catalogUpdater.addSimplePlanDescriptor(desc);
-            if (i % 1000 == 0) {
-                System.err.println("++++++++++++  Iteration = " + i);
-            }
-        }
-
-        return catalogUpdater.getCatalog();
     }
 }
