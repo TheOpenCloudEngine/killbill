@@ -84,21 +84,19 @@ import org.killbill.xmlloader.ValidationErrors;
 import org.killbill.xmlloader.XMLSchemaGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.uengine.garuda.killbill.model.BillingRule;
-import org.uengine.garuda.killbill.model.ProductDaoVersionWithPlan;
-import org.uengine.garuda.killbill.model.SubscriptionEventsExt;
-import org.uengine.garuda.killbill.model.catalog.Phase;
-import org.uengine.garuda.killbill.model.catalog.Plan;
-import org.uengine.garuda.killbill.model.catalog.Price;
-import org.uengine.garuda.killbill.model.catalog.Tier;
-import org.uengine.garuda.killbill.model.catalog.Usage;
-import org.uengine.garuda.killbill.service.BillingRuleService;
-import org.uengine.garuda.killbill.service.SubscriptionEventService;
-import org.uengine.garuda.killbill.util.JsonUtils;
+import org.killbill.billing.catalog.uengine.model.BillingRule;
+import org.killbill.billing.catalog.uengine.model.ProductDaoVersionWithPlan;
+import org.killbill.billing.catalog.uengine.model.catalog.Phase;
+import org.killbill.billing.catalog.uengine.model.catalog.Plan;
+import org.killbill.billing.catalog.uengine.model.catalog.Price;
+import org.killbill.billing.catalog.uengine.model.catalog.Tier;
+import org.killbill.billing.catalog.uengine.model.catalog.Usage;
+import org.killbill.billing.catalog.uengine.service.BillingRuleService;
+import org.killbill.billing.catalog.uengine.service.SubscriptionEventService;
+import org.killbill.billing.catalog.uengine.util.JsonUtils;
 import org.xml.sax.SAXException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
 
 /**

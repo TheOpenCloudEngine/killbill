@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?> <!--
+  ~ Copyright 2014-2017 Groupon, Inc
+  ~ Copyright 2014-2017 The Billing Project, LLC
+  ~
+  ~ The Billing Project licenses this file to you under the Apache License, version 2.0
+  ~ (the "License"); you may not use this file except in compliance with the
+  ~ License.  You may obtain a copy of the License at:
+  ~
+  ~    http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+  ~ WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+  ~ License for the specific language governing permissions and limitations
+  ~ under the License.
+  -->
+
+<!DOCTYPE configuration PUBLIC "-//mybatis.org//DTD Config 3.0//EN" "http://mybatis.org/dtd/mybatis-3-config.dtd">
+<configuration>
+    <typeAliases>
+        <!--<typeAlias alias="Person" type="com.vo.Person"/>-->
+        <!-- -Dorg.killbill.dao.url=jdbc:mysql://localhost:3306/killbill-->
+        <!-- -Dorg.killbill.dao.user=killbill-->
+        <!-- -Dorg.killbill.dao.password=killbill-->
+    </typeAliases>
+    <environments default="development">
+        <environment id="development">
+            <transactionManager type="JDBC"/> <!-- connecting to Local MySql -->
+            <dataSource type="POOLED">
+                <property name="driver" value="com.mysql.jdbc.Driver"/>
+                <property name="url" value="${org.killbill.dao.url}"/>
+                <property name="username" value="${org.killbill.dao.user}"/>
+                <property name="password" value="${org.killbill.dao.password}"/>
+                <property name="poolMaximumActiveConnections" value="20"/>
+                <property name="poolMaximumIdleConnections" value="20"/>
+                <property name="poolMaximumCheckoutTime" value="20000"/>
+                <property name="poolPingEnabled" value="true"/>
+                <property name="poolPingQuery" value="select 1"/>
+                <property name="poolPingConnectionsNotUsedFor" value="10000"/>
+                <property name="poolTimeToWait" value="15000"/>
+            </dataSource>
+        </environment>
+    </environments>
+    <mappers>
+        <mapper resource="org/killbill/billing/invoice/uengine/product-version-mapper.xml"/>
+    </mappers>
+</configuration>

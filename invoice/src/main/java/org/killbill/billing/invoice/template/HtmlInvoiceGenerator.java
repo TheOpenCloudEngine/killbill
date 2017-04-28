@@ -43,12 +43,12 @@ import org.killbill.billing.util.email.templates.TemplateEngine;
 import org.killbill.billing.util.io.IOUtils;
 import org.killbill.billing.util.template.translation.TranslatorConfig;
 import org.killbill.xmlloader.UriAccessor;
-import org.uengine.garuda.killbill.invoice.model.NotificationConfig;
-import org.uengine.garuda.killbill.invoice.model.NotificationType;
-import org.uengine.garuda.killbill.invoice.model.Organization;
-import org.uengine.garuda.killbill.invoice.model.Template;
-import org.uengine.garuda.killbill.invoice.service.InvoiceExtService;
-import org.uengine.garuda.killbill.invoice.util.JsonUtils;
+import org.killbill.billing.invoice.uengine.model.NotificationConfig;
+import org.killbill.billing.invoice.uengine.model.NotificationType;
+import org.killbill.billing.invoice.uengine.model.Organization;
+import org.killbill.billing.invoice.uengine.model.Template;
+import org.killbill.billing.invoice.uengine.service.InvoiceExtService;
+import org.killbill.billing.invoice.uengine.util.JsonUtils;
 
 import com.google.common.base.Strings;
 import com.google.inject.Inject;
