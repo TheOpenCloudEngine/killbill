@@ -414,6 +414,9 @@ public class DynamicVersionedCatalog {
                     Plan plan = new ObjectMapper().convertValue(entry.getValue(), Plan.class);
                     DefaultPlan defaultPlan = new DefaultPlan();
 
+                    //번들에 허용가능한 플랜 수 지정
+                    defaultPlan.setPlansAllowedInBundle(10000);
+
                     //플랜 이름
                     defaultPlan.setName(plan.getName());
 
