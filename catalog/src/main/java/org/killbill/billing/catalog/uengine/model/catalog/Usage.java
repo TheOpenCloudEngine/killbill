@@ -14,7 +14,7 @@ public class Usage {
     private String usageType;
     private String billingPeriod;
     private List<Tier> tiers;
-    private List<Vendor> overrideVendors;
+    private List<Vendor> overwriteVendors;
 
     public String getName() {
         return name;
@@ -64,11 +64,11 @@ public class Usage {
         this.tiers = tiers;
     }
 
-    public List<Vendor> getOverrideVendors() {
-        return overrideVendors;
+    public List<Vendor> getOverwriteVendors() {
+        return overwriteVendors;
     }
 
-    public void setOverrideVendors(List<Vendor> overrideVendors) {
-        this.overrideVendors = overrideVendors;
+    public void setOverwriteVendors(final List<Vendor> overwriteVendors) {
+        this.overwriteVendors = overwriteVendors;
     }
 }

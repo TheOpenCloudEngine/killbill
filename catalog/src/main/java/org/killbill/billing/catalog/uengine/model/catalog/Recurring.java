@@ -10,7 +10,6 @@ import org.killbill.billing.catalog.uengine.model.Vendor;
 public class Recurring {
     private String billingPeriod;
     private List<Price> recurringPrice;
-    private List<Vendor> overrideVendors;
 
     public String getBillingPeriod() {
         return billingPeriod;
@@ -26,13 +25,5 @@ public class Recurring {
 
     public void setRecurringPrice(List<Price> recurringPrice) {
         this.recurringPrice = recurringPrice;
-    }
-
-    public List<Vendor> getOverrideVendors() {
-        return overrideVendors;
-    }
-
-    public void setOverrideVendors(List<Vendor> overrideVendors) {
-        this.overrideVendors = overrideVendors;
     }
 }

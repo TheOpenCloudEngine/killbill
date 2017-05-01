@@ -19,6 +19,8 @@ package org.killbill.billing.invoice.uengine.model.catalog;
 
 import java.util.List;
 
+import org.killbill.billing.invoice.uengine.model.Vendor;
+
 /**
  * Created by uengine on 2017. 2. 2..
  */
@@ -31,6 +33,7 @@ public class Plan {
     private Phase finalPhase;
     private Long number_of_subscriptions_referenced_by_version;
     private Long number_of_subscriptions;
+    private List<Vendor> overwriteVendors;
 
     public String getName() {
         return name;
@@ -86,5 +89,13 @@ public class Plan {
 
     public void setNumber_of_subscriptions(Long number_of_subscriptions) {
         this.number_of_subscriptions = number_of_subscriptions;
+    }
+
+    public List<Vendor> getOverwriteVendors() {
+        return overwriteVendors;
+    }
+
+    public void setOverwriteVendors(final List<Vendor> overwriteVendors) {
+        this.overwriteVendors = overwriteVendors;
     }
 }

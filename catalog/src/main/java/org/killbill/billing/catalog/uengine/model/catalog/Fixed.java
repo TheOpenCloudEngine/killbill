@@ -9,7 +9,6 @@ import org.killbill.billing.catalog.uengine.model.Vendor;
  */
 public class Fixed {
     private List<Price> fixedPrice;
-    private List<Vendor> overrideVendors;
 
     public List<Price> getFixedPrice() {
         return fixedPrice;
@@ -17,13 +16,5 @@ public class Fixed {
 
     public void setFixedPrice(List<Price> fixedPrice) {
         this.fixedPrice = fixedPrice;
-    }
-
-    public List<Vendor> getOverrideVendors() {
-        return overrideVendors;
-    }
-
-    public void setOverrideVendors(List<Vendor> overrideVendors) {
-        this.overrideVendors = overrideVendors;
     }
 }
