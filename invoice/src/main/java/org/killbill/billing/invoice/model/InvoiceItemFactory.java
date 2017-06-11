@@ -59,7 +59,7 @@ public class InvoiceItemFactory {
         final InvoiceItemType type = invoiceItemModelDao.getType();
         switch (type) {
             case EXTERNAL_CHARGE:
-                item = new ExternalChargeInvoiceItem(id, createdDate, invoiceId, accountId, bundleId, description, startDate, amount, currency);
+                item = new ExternalChargeInvoiceItem(id, createdDate, invoiceId, accountId, bundleId, description, planName, startDate, amount, currency);
                 break;
             case FIXED:
                 item = new FixedPriceInvoiceItem(id, createdDate, invoiceId, accountId, bundleId, subscriptionId, planName, phaseName, description, startDate, amount, currency);

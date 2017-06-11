@@ -28,6 +28,7 @@ import java.util.UUID;
 
 import javax.annotation.Nullable;
 
+import org.apache.commons.lang.StringUtils;
 import org.joda.time.LocalDate;
 import org.killbill.billing.ErrorCode;
 import org.killbill.billing.ObjectType;
@@ -303,6 +304,7 @@ public class DefaultInvoiceUserApi implements InvoiceUserApi {
                                                                                      accountId,
                                                                                      charge.getBundleId(),
                                                                                      charge.getDescription(),
+                                                                                     charge.getPlanName(),
                                                                                      effectiveDate,
                                                                                      charge.getAmount(),
                                                                                      charge.getCurrency());
@@ -565,13 +567,13 @@ public class DefaultInvoiceUserApi implements InvoiceUserApi {
 
     @Override
     public List<InvoiceItem> getInvoiceItemsByParentInvoice(final UUID parentInvoiceId, final TenantContext context) throws InvoiceApiException {
-        final InternalTenantContext  internalTenantContext = internalCallContextFactory.createInternalTenantContext(parentInvoiceId, ObjectType.INVOICE, context);
+        final InternalTenantContext internalTenantContext = internalCallContextFactory.createInternalTenantContext(parentInvoiceId, ObjectType.INVOICE, context);
         return ImmutableList.copyOf(Collections2.transform(dao.getInvoiceItemsByParentInvoice(parentInvoiceId, internalTenantContext),
-                                                                    new Function<InvoiceItemModelDao, InvoiceItem>() {
-            @Override
-            public InvoiceItem apply(final InvoiceItemModelDao input) {
-                return InvoiceItemFactory.fromModelDao(input);
-            }
-        }));
+                                                           new Function<InvoiceItemModelDao, InvoiceItem>() {
+                                                               @Override
+                                                               public InvoiceItem apply(final InvoiceItemModelDao input) {
+                                                                   return InvoiceItemFactory.fromModelDao(input);
+                                                               }
+                                                           }));
     }
 }

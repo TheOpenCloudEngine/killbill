@@ -31,8 +31,11 @@ public class Plan {
     private String is_active;
     private List<Phase> initialPhases;
     private Phase finalPhase;
+    private List<Price> onetimePrice;
     private Long number_of_subscriptions_referenced_by_version;
     private Long number_of_subscriptions;
+    private Long number_of_oneTimeBuys_referenced_by_version;
+    private Long number_of_oneTimeBuys;
     private List<Vendor> overwriteVendors;
 
     public String getName() {
@@ -75,6 +78,14 @@ public class Plan {
         this.finalPhase = finalPhase;
     }
 
+    public List<Price> getOnetimePrice() {
+        return onetimePrice;
+    }
+
+    public void setOnetimePrice(List<Price> onetimePrice) {
+        this.onetimePrice = onetimePrice;
+    }
+
     public Long getNumber_of_subscriptions_referenced_by_version() {
         return number_of_subscriptions_referenced_by_version;
     }
@@ -91,11 +102,27 @@ public class Plan {
         this.number_of_subscriptions = number_of_subscriptions;
     }
 
+    public Long getNumber_of_oneTimeBuys_referenced_by_version() {
+        return number_of_oneTimeBuys_referenced_by_version;
+    }
+
+    public void setNumber_of_oneTimeBuys_referenced_by_version(Long number_of_oneTimeBuys_referenced_by_version) {
+        this.number_of_oneTimeBuys_referenced_by_version = number_of_oneTimeBuys_referenced_by_version;
+    }
+
+    public Long getNumber_of_oneTimeBuys() {
+        return number_of_oneTimeBuys;
+    }
+
+    public void setNumber_of_oneTimeBuys(Long number_of_oneTimeBuys) {
+        this.number_of_oneTimeBuys = number_of_oneTimeBuys;
+    }
+
     public List<Vendor> getOverwriteVendors() {
         return overwriteVendors;
     }
 
-    public void setOverwriteVendors(final List<Vendor> overwriteVendors) {
+    public void setOverwriteVendors(List<Vendor> overwriteVendors) {
         this.overwriteVendors = overwriteVendors;
     }
 }

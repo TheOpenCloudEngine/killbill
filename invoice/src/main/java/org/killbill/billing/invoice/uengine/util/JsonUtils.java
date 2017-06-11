@@ -25,6 +25,7 @@ import java.util.Map;
 
 import org.killbill.billing.invoice.uengine.common.exception.ServiceException;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -38,7 +39,17 @@ public class JsonUtils {
     /**
      * Jackson JSON Object Mapper
      */
-    private static ObjectMapper objectMapper = new ObjectMapper();
+    private static ObjectMapper objectMapper =
+            new ObjectMapper()
+                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+    public static ObjectMapper getObjectMapper() {
+        return objectMapper;
+    }
+
+    public static <T> T convertValue(Object obj, Class<T> T){
+        return objectMapper.convertValue(obj,T);
+    }
 
     /**
      * 지정한 Object를 Jackson JSON Object Mapper를 이용하여 JSON으로 변환한다.
@@ -94,7 +105,7 @@ public class JsonUtils {
 
         for (Method fromMethod : methods) {
             if (fromMethod.getDeclaringClass().equals(obj.getClass())
-                    && fromMethod.getName().startsWith("get")) {
+                && fromMethod.getName().startsWith("get")) {
 
                 String fromName = fromMethod.getName();
                 String toName = fromName.replace("get", "set");
