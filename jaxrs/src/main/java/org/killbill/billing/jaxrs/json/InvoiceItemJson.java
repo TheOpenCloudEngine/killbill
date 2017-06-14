@@ -211,7 +211,7 @@ public class InvoiceItemJson extends JsonBase {
 
             @Override
             public UUID getId() {
-                return null;
+                return invoiceItemId != null ? UUID.fromString(invoiceItemId) : null;
             }
 
             @Override

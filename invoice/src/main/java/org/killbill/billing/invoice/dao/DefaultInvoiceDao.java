@@ -1155,15 +1155,15 @@ public class DefaultInvoiceDao extends EntityDaoBase<InvoiceModelDao, Invoice, I
             Date currentUtcTime = clock.getUTCNow().toDate();
 
             //비교군과 주어진 버젼의 effective 날짜를 비교하여 is_current 를 구한다.
-            //버젼이 시간이 currentUtcTime 보다 이전인 그룹중 가장 시간 값이 큰 것.
+            //버젼이 시간이 currentUtcTime 보다 같거나 이전인 그룹중 가장 시간 값이 큰 것.
             String is_current = "N";
             ProductDaoVersion maxTimeVersion = null;
             for (ProductDaoVersion version : versions) {
-                if (version.getEffective_date().getTime() < currentUtcTime.getTime()) {
+                if (version.getEffective_date().getTime() <= currentUtcTime.getTime()) {
                     if (maxTimeVersion == null) {
                         maxTimeVersion = version;
                     } else {
-                        if (maxTimeVersion.getEffective_date().getTime() < version.getEffective_date().getTime()) {
+                        if (maxTimeVersion.getEffective_date().getTime() <= version.getEffective_date().getTime()) {
                             maxTimeVersion = version;
                         }
                     }

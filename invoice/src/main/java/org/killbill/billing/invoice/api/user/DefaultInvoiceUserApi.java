@@ -298,7 +298,7 @@ public class DefaultInvoiceUserApi implements InvoiceUserApi {
                         invoiceForExternalCharge = existingInvoicesForExternalCharges.get(invoiceIdForExternalCharge);
                     }
 
-                    final InvoiceItem externalCharge = new ExternalChargeInvoiceItem(UUIDs.randomUUID(),
+                    final InvoiceItem externalCharge = new ExternalChargeInvoiceItem(charge.getId() != null ? charge.getId() : UUIDs.randomUUID(),
                                                                                      context.getCreatedDate(),
                                                                                      invoiceForExternalCharge.getId(),
                                                                                      accountId,
