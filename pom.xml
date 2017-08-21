@@ -69,24 +69,24 @@
     <properties>
         <killbill.version>${project.version}</killbill.version>
     </properties>
-    <repositories>
-        <repository>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <id>central</id>
-            <name>Open Cloud Engine Maven Repository</name>
-            <url>http://maven.opencloudengine.org/content/groups/public/</url>
-        </repository>
-        <repository>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <id>jsqlparser-snapshots</id>
-            <url>https://oss.sonatype.org/content/groups/public/</url>
-        </repository>
-    </repositories>
+    <!--<repositories>-->
+        <!--<repository>-->
+            <!--<releases>-->
+                <!--<enabled>true</enabled>-->
+            <!--</releases>-->
+            <!--<snapshots>-->
+                <!--<enabled>true</enabled>-->
+            <!--</snapshots>-->
+            <!--<id>central</id>-->
+            <!--<name>Open Cloud Engine Maven Repository</name>-->
+            <!--<url>http://maven.opencloudengine.org/content/groups/public/</url>-->
+        <!--</repository>-->
+        <!--<repository>-->
+            <!--<snapshots>-->
+                <!--<enabled>true</enabled>-->
+            <!--</snapshots>-->
+            <!--<id>jsqlparser-snapshots</id>-->
+            <!--<url>https://oss.sonatype.org/content/groups/public/</url>-->
+        <!--</repository>-->
+    <!--</repositories>-->
 </project>

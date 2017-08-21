@@ -38,6 +38,10 @@
       <property name="caretWidth" class="java.lang.Integer" />
     </properties>
   </component>
+  <component name="FrameworkDetectionExcludesConfiguration">
+    <file type="web" url="file://$PROJECT_DIR$/profiles/killbill" />
+    <file type="web" url="file://$PROJECT_DIR$/profiles/killpay" />
+  </component>
   <component name="MavenProjectsManager">
     <option name="originalFiles">
       <list>
