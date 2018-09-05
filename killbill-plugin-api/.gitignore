@@ -1,0 +1,16 @@
+.idea/workspace.xml
+.idea/libraries
+*.iml
+
+*.class
+
+# Package Files #
+*.jar
+*.war
+*.ear
+.idea
+
+target
+pom.xml.bak
+pom.xml.releaseBackup
+release.properties

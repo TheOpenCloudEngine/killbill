@@ -17,6 +17,7 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="killbill-account" />
+        <module name="killbill-api" />
         <module name="killbill-beatrix" />
         <module name="killbill-catalog" />
         <module name="killbill-currency" />
@@ -27,6 +28,13 @@
         <module name="killbill-junction" />
         <module name="killbill-overdue" />
         <module name="killbill-payment" />
+        <module name="killbill-plugin-api-catalog" />
+        <module name="killbill-plugin-api-control" />
+        <module name="killbill-plugin-api-currency" />
+        <module name="killbill-plugin-api-entitlement" />
+        <module name="killbill-plugin-api-invoice" />
+        <module name="killbill-plugin-api-notification" />
+        <module name="killbill-plugin-api-payment" />
         <module name="killbill-profiles-killbill" />
         <module name="killbill-profiles-killpay" />
         <module name="killbill-subscription" />
@@ -38,6 +46,7 @@
     <bytecodeTargetLevel>
       <module name="killbill" target="1.6" />
       <module name="killbill-account" target="1.6" />
+      <module name="killbill-api" target="1.6" />
       <module name="killbill-beatrix" target="1.6" />
       <module name="killbill-catalog" target="1.6" />
       <module name="killbill-currency" target="1.6" />
@@ -48,6 +57,14 @@
       <module name="killbill-junction" target="1.6" />
       <module name="killbill-overdue" target="1.6" />
       <module name="killbill-payment" target="1.6" />
+      <module name="killbill-plugin-api" target="1.6" />
+      <module name="killbill-plugin-api-catalog" target="1.6" />
+      <module name="killbill-plugin-api-control" target="1.6" />
+      <module name="killbill-plugin-api-currency" target="1.6" />
+      <module name="killbill-plugin-api-entitlement" target="1.6" />
+      <module name="killbill-plugin-api-invoice" target="1.6" />
+      <module name="killbill-plugin-api-notification" target="1.6" />
+      <module name="killbill-plugin-api-payment" target="1.6" />
       <module name="killbill-profiles" target="1.6" />
       <module name="killbill-profiles-killbill" target="1.6" />
       <module name="killbill-profiles-killpay" target="1.6" />

@@ -4,6 +4,7 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/killbill.iml" filepath="$PROJECT_DIR$/killbill.iml" />
       <module fileurl="file://$PROJECT_DIR$/account/killbill-account.iml" filepath="$PROJECT_DIR$/account/killbill-account.iml" />
+      <module fileurl="file://$PROJECT_DIR$/killbill-api/killbill-api.iml" filepath="$PROJECT_DIR$/killbill-api/killbill-api.iml" />
       <module fileurl="file://$PROJECT_DIR$/beatrix/killbill-beatrix.iml" filepath="$PROJECT_DIR$/beatrix/killbill-beatrix.iml" />
       <module fileurl="file://$PROJECT_DIR$/catalog/killbill-catalog.iml" filepath="$PROJECT_DIR$/catalog/killbill-catalog.iml" />
       <module fileurl="file://$PROJECT_DIR$/currency/killbill-currency.iml" filepath="$PROJECT_DIR$/currency/killbill-currency.iml" />
@@ -14,6 +15,14 @@
       <module fileurl="file://$PROJECT_DIR$/junction/killbill-junction.iml" filepath="$PROJECT_DIR$/junction/killbill-junction.iml" />
       <module fileurl="file://$PROJECT_DIR$/overdue/killbill-overdue.iml" filepath="$PROJECT_DIR$/overdue/killbill-overdue.iml" />
       <module fileurl="file://$PROJECT_DIR$/payment/killbill-payment.iml" filepath="$PROJECT_DIR$/payment/killbill-payment.iml" />
+      <module fileurl="file://$PROJECT_DIR$/killbill-plugin-api/killbill-plugin-api.iml" filepath="$PROJECT_DIR$/killbill-plugin-api/killbill-plugin-api.iml" />
+      <module fileurl="file://$PROJECT_DIR$/killbill-plugin-api/catalog/killbill-plugin-api-catalog.iml" filepath="$PROJECT_DIR$/killbill-plugin-api/catalog/killbill-plugin-api-catalog.iml" />
+      <module fileurl="file://$PROJECT_DIR$/killbill-plugin-api/control/killbill-plugin-api-control.iml" filepath="$PROJECT_DIR$/killbill-plugin-api/control/killbill-plugin-api-control.iml" />
+      <module fileurl="file://$PROJECT_DIR$/killbill-plugin-api/currency/killbill-plugin-api-currency.iml" filepath="$PROJECT_DIR$/killbill-plugin-api/currency/killbill-plugin-api-currency.iml" />
+      <module fileurl="file://$PROJECT_DIR$/killbill-plugin-api/entitlement/killbill-plugin-api-entitlement.iml" filepath="$PROJECT_DIR$/killbill-plugin-api/entitlement/killbill-plugin-api-entitlement.iml" />
+      <module fileurl="file://$PROJECT_DIR$/killbill-plugin-api/invoice/killbill-plugin-api-invoice.iml" filepath="$PROJECT_DIR$/killbill-plugin-api/invoice/killbill-plugin-api-invoice.iml" />
+      <module fileurl="file://$PROJECT_DIR$/killbill-plugin-api/notification/killbill-plugin-api-notification.iml" filepath="$PROJECT_DIR$/killbill-plugin-api/notification/killbill-plugin-api-notification.iml" />
+      <module fileurl="file://$PROJECT_DIR$/killbill-plugin-api/payment/killbill-plugin-api-payment.iml" filepath="$PROJECT_DIR$/killbill-plugin-api/payment/killbill-plugin-api-payment.iml" />
       <module fileurl="file://$PROJECT_DIR$/profiles/killbill-profiles.iml" filepath="$PROJECT_DIR$/profiles/killbill-profiles.iml" />
       <module fileurl="file://$PROJECT_DIR$/profiles/killbill/killbill-profiles-killbill.iml" filepath="$PROJECT_DIR$/profiles/killbill/killbill-profiles-killbill.iml" />
       <module fileurl="file://$PROJECT_DIR$/profiles/killpay/killbill-profiles-killpay.iml" filepath="$PROJECT_DIR$/profiles/killpay/killbill-profiles-killpay.iml" />

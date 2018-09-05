@@ -1,0 +1,380 @@
+0.50.1
+    Add TimeUnit.WEEKS
+
+0.50
+    shopping cart API
+    Add START_OF_TERM BillingActionPolicy
+
+0.49
+    Added new ErrorCode for control of the externalKeys
+    Modify catalog apis for high cardinality objects like Plan/Product to use Collection instead of arrays
+    Entitlement externalKeys over 64 characters allow the creation of duplicates
+
+0.48
+    Fix payment api to allow retrieving payment transaction tags
+
+0.47
+    New ErrorCode added to manage the limitation of plans allowed per bundle
+
+0.46
+    Add api to upload overdue config
+
+0.45
+    Notes for account
+    Catalog cleanup api
+
+0.44
+    entitlement change apis now match create apis to use PlanSpecifier
+
+0.43
+    Add new payment apis to cancel scheduled future payment retry
+
+0.42
+    Catalog api changes (SimplePlan) and Overdue tag rework
+
+0.41
+    Incremental changes for catalog change apis (SimplePlan)
+
+0.40
+    Add HA invoice apis
+    Catalog modification for ability to dynamically add simple plans
+
+0.39
+    Updated PaymentApi methods with new attribute "withAttempts"
+
+0.38
+     Modify catalog apis to avoid circular dependencies
+
+0.37
+    Add new ErrorCodes (PAYMENT_METHOD_DIFFERENT_ACCOUNT_ID, PAYMENT_DIFFERENT_ACCOUNT_ID, PAYMENT_TRANSACTION_DIFFERENT_ACCOUNT_ID)
+
+0.36
+    Add new api for HA feature
+
+0.35
+    0.33.1 merge for 0.17.x
+
+0.34
+    Add EntitlementState.PENDING
+    Remove requestedDate from SubscriptionEvent
+    Add Plan.getPriceList
+    Add ErrorCode.SUB_BLOCKING_STATE_INVALID_ARG
+    Remove Entitlement.block and Entitlement.unblock
+    Add SubscriptionApi.addBlockingState
+    Add SubscriptionApi.getBlockingStates
+    Add description for credit and external charge APIs
+    Add ImmutableAccountData.getFixedOffsetTimeZone and ImmutableAccountData.getReferenceTime
+    Switch to LocalDate in DryRunArguments
+    Replace effectiveDate with entitlementEffectiveDate, billingEffectiveDate in subscription create apis
+    Add isMigrated parameter for subscription creation
+    Add includesMigrated parameter to InvoiceUserApi.getInvoicesByAccount
+    Add InvoiceUserApi.createMigrationInvoice
+    Add Duration.addToLocalDate
+    Add trackingId for SubscriptionUsageRecord to support usage API idempotency
+    Add ErrorCode.CAT_UNDEFINED_DURATION
+    Rename ErrorCode.CAT_NO_SUCH_OVEDUE_STATE to ErrorCode.CAT_NO_SUCH_OVERDUE_STATE
+    Add TenantKey.PER_TENANT_CONFIG
+    Remove EntitlementApi.setBlockingState and EntitlementApi.getBlockingStatesForServiceAndType
+    Add OverdueApi.getOverdueStateFor
+    Add ErrorCode.INVOICE_ITEMS_ADJUSTMENT_MISSING
+    Add KillbillNodesApi.getCurrentNodeInfo
+    Rename Plan.getEffectiveDateForExistingSubscriptons to Plan.getEffectiveDateForExistingSubscriptions
+    Add new BillingPeriods
+    Add OSGIKillbill.getAdminPaymentApi
+    Add PaymentApi.createChargebackReversal and PaymentApi.createChargebackReversalWithPaymentControl
+    Add Entitlement.getBillCycleDayLocal and Entitlement.updateBCD
+    Add ErrorCode.ENT_UNCANCEL_BAD_STATE
+
+0.33.1
+    Introduce TenantKey.PLUGIN_PAYMENT_STATE_MACHINE_
+
+0.33
+    Add new ErrorCode
+
+0.32
+    Add support for pluginKey
+
+0.31
+    Api changes in PluginInfo
+
+0.30
+    Add support for node commands
+    Add new catalog apis
+
+0.29
+    Introduce new payment error
+
+0.28
+    Add new entitlement api to create combo subscriptions (base + add-ons)
+
+0.27
+    Add entitlement setBlockingState api
+
+0.26
+    Permission rework
+    Add ErrorCode
+
+0.25
+    Add new interfaces to retrieve PluginInfo + new ErrorCode
+
+0.24
+    Fix BillingPeriod enum
+
+0.23
+    Modify invoice dryRun arguments
+    Add support for BI_ANNAUL BillingPeriod
+
+0.22
+    Add isSuccess flag for InvoicePayment
+
+0.21
+    Error code cleanup
+
+0.20
+    Add missing ENTITLEMENT enum value in PluginConfig
+
+0.19
+    Add PluginProperty for Entitlement apis and some error code for handling entitlement plugin errors
+
+0.18
+    Add new api for catalog rules
+
+0.16
+    Add new CANCELED PaymentPluginStatus (used to return info about a payment that was not even submitted)
+
+0.15
+    Add new Payment apis *WithControl and AdminPaymentApi
+
+0.14
+    Initial release for Kill Bill 0.14.x
+    Update killbill-oss-parent to 0.11
+
+0.13.0
+    New Catalog, Entitlement apis to allow to specify price override when creating new subscriptions or changing plans on existing one
+
+0.12.4
+    API renaming for getTenantValueForKey -> getTenantValuesForKey
+
+0.12.3
+    Add new PLUGIN_CONFIG_ TenantKey
+    Expose paymentMethodId in buildFormDescriptor
+
+0.12.2
+    Entitlement: expose subscription events in Subscription
+    Catalog: remove PlanPhase#getPlan
+    New permissions for tenants, overdue and catalog
+
+0.12.1
+    ErrorCode: add INVOICE_ITEM_ADJUSTMENT_ITEM_INVALID and INVOICE_ITEM_TYPE_INVALID
+
+0.12.0
+    ErrorCode: rename EXTERNAL_CHARGE_CURRENCY_INVALID to CURRENCY_INVALID
+
+0.11.3
+    Add PluginType.INVOICE for invoice plugins
+    Update killbill-oss-parent to 0.9.5
+
+0.11.2
+    Add api for catalog and overdue to upload the per tenant catalog
+
+0.11.1
+    Add new tenant keys for invoice resources (templates, translations, ..)
+
+0.10.4
+    Add new api to retrieve OverdueConfig
+
+0.10.3
+    Add payment apis (to go through payment control/routing logic)
+
+0.10.2
+    catalog: Add optional priceList filter when retrieving available ADD_ONs.
+
+0.10.1
+    Modify invoice api to trigger dryRun invoice to it also supports adding subscription info (CREATE, CHANGE, CANCEL) 
+
+0.9.11
+    Update PaymentOptions api
+
+0.9.10
+    Update usage api for bulk record and change granularity to LocalDate
+
+0.9.9
+    Add new payment ErrorCode
+
+0.9.8
+    Added marker interface for API (profiling work)
+
+0.9.7
+    Refinement for PaymentApi
+    Update killbill-oss-parent to 0.7.12
+
+0.9.6
+    Invoice:
+      Change PaymentCookieId in InvoicePaymentApi to be a string
+      Remove chargeback APIs in InvoicePaymentApi
+      Add InvoiceUserApi#getInvoiceByPayment
+      Add Tax invoice item
+    Payment:
+      Expose purchased and credited amounts in DirectPayment
+      Expose isAuthVoided in DirectPayment
+      Allow override of payment method id for auth and purchase (https://github.com/killbill/killbill/issues/177)
+      Separate refund and credit (https://github.com/killbill/killbill/issues/187)
+      Add chargeback support (https://github.com/killbill/killbill/issues/187)
+      Introduce PaymentControl APIs
+      Add DirectPaymentTransaction#getExternalKey (https://github.com/killbill/killbill/issues/180)
+      Remove PaymentStatus from DirectPayment
+      Deprecate the old PaymentApi
+      Add PaymentMethod#getExternalKey
+      Remove CC information from PaymentMethodPlugin
+      Rename PaymentStatus to TransactionStatus
+      Deprecate PaymentInfoPlugin and RefundInfoPlugin for PaymentTransactionInfoPlugin
+    OSGI:
+      Export DirectPaymentApi instead of PaymentApi
+      Export SecurityApi
+    Security: add login/logout APIs
+
+0.9.5
+    Introduction of PaymentGatewayApi (unstable)
+
+0.9.4
+    Add AuditLogs support for DirectPayment and DirectPaymentTransaction
+
+0.9.3
+    Iteration on DirectPaymentApi
+
+0.9.2
+    Iteration on DirectPaymentApi
+
+0.9.1
+    Update Payment APIs to pass plugin specific properties
+
+0.9.0
+    Simplify APIs for external charges, add bulk creation capability
+    Rename PaymentMethodKVInfo to PluginProperty
+    Add getProperties() to PaymentInfoPlugin and RefundInfoPlugin
+    Update killbill-oss-parent to 0.7.0
+
+0.8.4
+    Introduction of direct payment apis (unstable)
+
+0.8.3
+    Api modifications for usage initial work
+
+0.8.2
+    Move package name from com.ning -> org.killbill
+
+0.8.1
+    Update killbill-oss-parent to 0.5.23
+    Add SubscriptionApi#getSubscriptionBundles and SubscriptionApi#searchSubscriptionBundles
+    Add InvoiceUserApi#searchInvoices
+    Add AccountAuditLogs#getAuditLogsForPaymentMethod
+
+0.8.0
+    Update killbill-oss-parent to 0.5.17
+    Add ErrorCode.PAYMENT_PLUGIN_GET_REFUND_INFO and ErrorCode.PAYMENT_PLUGIN_SEARCH_REFUNDS
+    Add PaymentApi#getRefunds and PaymentApi#searchRefunds APIs
+    Rename Refund#getPluginDetail to Refund#getRefundInfoPlugin for consistency
+    Add RefundInfoPlugin#getKbPaymentId
+    Remove RefundInfoPlugin#getReferenceId and introduce RefundInfoPlugin#getFirstRefundReferenceId
+    and RefundInfoPlugin#getRefundPaymentReferenceId for consistency
+    Add CustomFieldUserApi#searchCustomFields and CustomFieldUserApi#getCustomFields
+    Add TagUserApi#searchTags and TagUserApi#getTags
+
+0.7.13
+    Add APIs updateExternalKey for bundle and removeCustomFields for all custom fields
+
+0.7.12
+    Payment: add getPayments APIs
+    Update killbill-oss-parent version to 0.5.15
+
+0.7.11
+    Update killbill-oss-parent version to 0.5.14
+    Currencies: introduce BTC
+
+0.7.10
+    Add missing PENDING state for PaymentPluginStatus/RefundPluginStatus
+
+0.7.9
+    Add new PENDING state for payment/refund for asynchronous payment plugins
+
+0.7.8
+    Add includedDeleted parameter in Tag APIs
+    Add PaymentApi#searchPayments APIs
+    Add PaymentInfoPlugin#getKbPaymentId
+    Add ErrorCode#PAYMENT_PLUGIN_SEARCH_PAYMENTS
+    Add AuditUserApi#getAccountAuditLogs
+    Update to killbill-oss-parent 0.5.9
+
+0.7.7
+    Fix for https://github.com/killbill/killbill/issues/136
+
+0.7.6
+    Export refund status
+
+0.7.5
+    Add InvoiceFormatter API for currency conversion
+
+0.7.4
+    Currency api changes
+
+0.7.3
+    Fix currency missing from PaymentInfoPlugin RefundInfoPlugin
+
+0.7.2
+    Add new plugin type for currency along with currency api
+
+0.7.0
+    Add support for pagination
+    Upgrade to killbill-oss-parent 0.5.0
+
+0.6.7
+    Api change for Entitlement
+
+0.6.6
+    Api change for Entitlement (uncancel, originalCreatedDate for SubscriptionBundle)
+
+0.6.5
+    Api change for Entitlement (to return lastActive for all catalog methods)
+    Removed unsued APi for Payment (that now live in the plugins)
+
+0.6.4
+    Add more cases for entitlement cancellation/change from the matrix of possible cases
+
+0.6.3
+    Add the ability to retrieve the active bundle using its external key only
+
+0.6.2
+    Add error code for dupliacte active bundle
+
+0.6.1
+    Minor entitlement api changes after code review
+
+0.6.0
+    New entitlement APIs
+    Overdue is by default account level
+
+0.5.0
+    Initial security APIs for RBAC
+    Rename OverdueCancellationPolicicy to OverdueCancellationPolicy
+    Upgrade to killbill-oss-parent 0.3.11
+
+0.4.0
+    Add search APIs
+    Add getKbPaymentMethodId in PaymentMethodPlugin
+
+0.3.3
+    Add all ISO currencies to the catalog
+
+0.3.2
+    Upgrade to killbill-oss-parent 0.3.3
+    Rename Entitlement -> Susbscription and create new Entitlement API replacing the JunctionApi
+
+0.3.1
+    Upgrade to killbill-oss-parent 0.3.1
+
+0.3.0
+    Remove PaymentMethodPlugin#getValueString
+    Update to killbill-oss-parent 0.2.4
+
+0.2.3
+    Initial import from https://github.com/killbill/killbill

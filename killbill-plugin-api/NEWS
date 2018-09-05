@@ -1,0 +1,137 @@
+0.23.1
+    Add bundleExternalKey in Subscription event metadata field
+
+0.23
+    Add new Metadata field for Subscription events
+
+0.22
+    Shopping cart API
+
+0.21
+    Add metadata object for Payment events
+
+0.20
+    Update plugin-api with HA branch 
+
+0.19
+    Update plugin-api to 0.19 for KB release 0.17
+
+0.18
+    Add ExtBusEventType BROADCAST_SERVICE
+
+0.17
+    Modify EntitlementContext for new combo entitlement api
+
+0.16
+    Add dryRun to InvoicePluginApi#getAdditionalInvoiceItems signature
+
+0.15
+    Add new PaymentApiType and HPPType in the PaymentControlContext to support more than just pure payment transaction control plugin
+
+0.14
+    Additional changes in plugin control api (renaming and API changes)
+
+0.13
+    Rename routing module -> control module (and same for package)
+    Add getAdjustedPluginProperties() to OnSuccessPaymentControlResult and      OnFailurePaymentControlResult
+
+0.12
+    Add new EntitlementPluginApi
+
+0.11
+    Add support for catalog plugin api
+
+0.10
+    routing: allow control plugins to override plugin properties
+
+0.9
+    Initial release for Kill Bill 0.14.x
+    Update killbill-oss-parent to 0.11
+
+0.8.5
+    Add new event type for INVOICE_NOTIFICATION
+
+0.8.4
+    Revert plugin interface to allow for all plugin types to receive events
+
+0.8.3
+    Add new plugin interface to allow for all plugin types to receive events
+    Add new ExtBusEventType TENANT_CONFIG_CHANGE, TENANT_CONFIG_DELETION and new metaData field
+
+0.8.2
+    Rename module/package/api retry -> routing
+
+0.8.1
+    Add plugin properties for PaymentControlPluginApi
+
+0.7.5
+    Update PriorPaymentControlResult to allow overwriting payment methodID
+
+0.7.4
+    Introduce new invoice plugin
+    Introduce new retry plugin
+    Payment:
+      Introduce PaymentPluginApi#creditPayment (https://github.com/killbill/killbill/issues/187)
+      Deprecate PaymentInfoPlugin and RefundInfoPlugin for PaymentTransactionInfoPlugin
+      Rename PaymentPluginApi#processPayment to purchasePayment
+      Rename PaymentPluginApi#processRefund to refundPayment
+      Add kbTransactionId to authorizePayment, capturePayment, purchasePayment, voidPayment and refundPayment
+    Update killbill-oss-parent to 0.7.12
+
+0.7.3
+    Add missing context in PaymentPluginApi#resetPaymentMethods
+
+0.7.2
+    Iteration on payment gateway APIs
+    Update killbill-oss-parent to 0.7.8
+
+0.7.1
+    Iteration on direct payment API
+    Update killbill-oss-parent to 0.7.5
+
+0.7.0
+    Allow custom properties to be passed to payment API calls
+    Update killbill-oss-parent to 0.7.0
+
+0.6.5
+    Add (ActiveMerchant-like) APIs for direct payment (auth, capture, ...)
+
+0.6.4
+    Update package from com.ning -> org.killbill
+
+0.6.3
+    Update killbill-oss-parent to 0.5.17
+    Add PaymentPluginApi#searchRefunds
+
+0.6.2
+    Add PaymentPluginApi#searchPayments
+    Update to killbill-oss-parent 0.5.9
+
+0.6.1
+    Currency api changes
+
+0.6.0
+    Add new Currency plugin apis
+
+0.5.0
+    Add support for pagination in PaymentPluginApi#searchPaymentMethods
+    Update to killbill-oss-parent 0.5.1
+
+0.4.0
+    Add external event type for PAUSE/RESUME (entitlement)
+
+0.3.0
+    Add searchPaymentMethods in PaymentPluginApi
+    Update to killbill-oss-parent 0.3.7
+
+0.2.6
+    Update to killbill-oss-parent 0.3.5
+
+0.2.5
+    Update to killbill-oss-parent 0.3.1
+
+0.2.4
+    Update to killbill-oss-parent 0.2.5
+
+0.2.3
+    Initial import from https://github.com/killbill/killbill
